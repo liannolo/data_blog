@@ -1,0 +1,168 @@
+---
+title: 'We Are What We Eat: Getting the Data into R'
+author: Lauren
+date: '2018-10-03'
+slug: we-are-what-we-eat-getting-the-data-into-r
+categories: 
+  - American Diet
+tags:
+  - Data cleaning
+  - R
+  - Excel
+  - Web Scraping
+  - Rvest
+description: ''
+featured: ''
+featuredalt: ''
+featuredpath: ''
+linktitle: ''
+type: 'post'
+---
+
+
+
+<div id="getting-the-usda-data-from-excel-spreadsheets" class="section level2">
+<h2>Getting the USDA Data From Excel Spreadsheets</h2>
+<p>After reading several articles here, here, and here, I was inspired to investigate the USDA’s food production and consumption data myself. Most of the articles used food production for their analysis (this data is provided by USDA in a csv file), but I wanted to instead focus on consumption which the USDA has calculated by subtracting their estimates for food loss. For example, food can be lost XXXX.</p>
+<p>However, the consumption data only exists in Excel spreadsheets, which I had not yet had to deal with in R. This was a learning experience for me and thanks to the great work of Hadley Wickham (yet again) and his readxl package, this task was made much easier than it otherwise would have been.</p>
+<pre class="r"><code>library(readxl)
+library(dplyr)
+library(rvest)</code></pre>
+<pre class="r"><code>setwd(&#39;/Users/laureniannolo/Documents/datasets/American Diets Over Time/data/&#39;)
+filenames = dir(pattern=&quot;*.xls&quot;)
+for( i in 1:length(filenames) )
+{
+
+
+path &lt;- filenames[i]
+path_name &lt;- gsub(&quot;^\\.+|\\.[^.]*$&quot;, &quot;&quot;, path) #get rid of .xls
+sheetnames &lt;- excel_sheets(path)
+
+mylist &lt;- lapply(excel_sheets(path), read_xls, path = path, range = &quot;A6:Q52&quot;, na = c(&quot;&quot;,&quot;6/&quot;,&quot;NA&quot;,&quot;N/A&quot;)) #/6 is for the notes about italian cheese
+
+# name the dataframes using the sheetnames
+
+names(mylist) &lt;- sheetnames
+
+#remove the table of contents from the list
+mylist &lt;- mylist[names(mylist) != &#39;TableOfContents&#39;]
+
+
+#list2env(mylist ,.GlobalEnv)
+
+
+#iterate over all the dataframes in the list and remove columns that are completely NA,
+#using 90% of column as NA as a threshold to be safe
+
+
+NAthres &lt;- 0.9
+
+mylist2 &lt;- lapply(mylist, function(df) {
+  cols &lt;- apply(df, 2, function(x) sum(is.na(x)))
+  return(df[, cols &lt; (nrow(df) * NAthres)])
+})
+
+#list2env(mylist2 ,.GlobalEnv)
+
+
+
+#then iterate over all the dataframes in the list and name the columns correctly
+#depending on if they are a summary tab or a detail tab
+#added in edge cases after first iteration to handle some different formatting of tabs
+
+mylist3 &lt;- lapply(mylist2, function(df) {
+  ifelse(ncol(df) == 16, 
+    #for detail tabs in all files but fat and juice
+    colnames(df)&lt;- c(&quot;year&quot;,&quot;primaryweight_lbyr&quot;,&quot;lossretail_percent&quot;,&quot;retail_lbyr&quot;,&quot;lossconsumer_percent&quot;,&quot;consumer_lbyr&quot;,
+                     &quot;consumer_nonedibleloss_percent&quot;,&quot;consumer_cookingloss_percent&quot;,&quot;totalloss_percent&quot;,&quot;percapita_lbyr&quot;,
+                     &quot;percapita_unitday&quot;,&quot;percapita_gday&quot;,&quot;caloriesperunit&quot;,&quot;unit_equiv&quot;,&quot;calories_daily&quot;,&quot;foodpattern_uniteqiv&quot;),
+  
+  ifelse(ncol(df) == 15, #15 is for fat which is missing foodpattern_uniteqiv for detailed tabs and has daily_fat_g
+    colnames(df)&lt;- c(&quot;year&quot;,&quot;primaryweight_lbyr&quot;,&quot;lossretail_percent&quot;,&quot;retail_lbyr&quot;,&quot;lossconsumer_percent&quot;,&quot;consumer_lbyr&quot;,
+                     &quot;consumer_nonedibleloss_percent&quot;,&quot;consumer_cookingloss_percent&quot;,&quot;totalloss_percent&quot;,&quot;percapita_lbyr&quot;,
+                     &quot;percapita_unitday&quot;,&quot;percapita_gday&quot;,&quot;caloriesperunit&quot;,&quot;daily_fat_g&quot;,&quot;calories_daily&quot;),
+  
+  ifelse(ncol(df) == 17, #17 is for detail fruit juice and milk which has an added column of gallons per year
+    colnames(df)&lt;- c(&quot;year&quot;,&quot;primaryweight_lbyr&quot;,&quot;lossretail_percent&quot;,&quot;retail_lbyr&quot;,&quot;lossconsumer_percent&quot;,&quot;consumer_lbyr&quot;,
+                      &quot;consumer_nonedibleloss_percent&quot;,&quot;consumer_cookingloss_percent&quot;,&quot;totalloss_percent&quot;,&quot;percapita_lbyr&quot;,
+                      &quot;percapita_gallonsyr&quot;,&quot;percapita_unitday&quot;,&quot;percapita_gday&quot;,&quot;caloriesperunit&quot;,&quot;unit_equiv&quot;,&quot;calories_daily&quot;,
+                     &quot;foodpattern_uniteqiv&quot;), 
+  
+  ifelse(ncol(df) == 11,  #11 is for summary juice and milk which has an added column of gallons per year
+    colnames(df)&lt;- c(&quot;year&quot;,&quot;primaryweight_lbyr&quot;,&quot;retail_lbyr&quot;,&quot;consumer_lbyr&quot;,&quot;totalloss_percent&quot;,&quot;percapita_lbyr&quot;,
+                     &quot;percapita_gallonsyr&quot;,&quot;percapita_unitday&quot;,&quot;percapita_gday&quot;,&quot;calories_daily&quot;,&quot;foodpattern_uniteqiv&quot;),
+    
+  ifelse(ncol(df) == 10,  #10 is for summary fat which is missing foodpattern_uniteqiv and has daily_fat_g
+    colnames(df)&lt;- c(&quot;year&quot;,&quot;primaryweight_lbyr&quot;,&quot;retail_lbyr&quot;,&quot;consumer_lbyr&quot;,&quot;totalloss_percent&quot;,&quot;percapita_lbyr&quot;,
+                            &quot;percapita_unitday&quot;,&quot;percapita_gday&quot;,&quot;daily_fat_g&quot;,&quot;calories_daily&quot;),
+    
+    #for summary tabs except fruit juice and fat
+    colnames(df)&lt;- c(&quot;year&quot;,&quot;primaryweight_lbyr&quot;,&quot;retail_lbyr&quot;,&quot;consumer_lbyr&quot;,&quot;totalloss_percent&quot;,&quot;percapita_lbyr&quot;,
+                     &quot;percapita_unitday&quot;,&quot;percapita_gday&quot;,&quot;calories_daily&quot;,&quot;foodpattern_uniteqiv&quot;)
+    
+  
+  )))))
+  df
+})
+
+#list2env(mylist3 ,.GlobalEnv)
+
+#add three additional columns, one with the name of the dataframe, one with the name of the
+#excel spreadsheet, and one with either &quot;summary&quot; or &quot;detail&quot;
+
+mylist4 &lt;- mapply(function(df) {
+  &quot;datatype&quot; = ifelse((ncol(df) == 16) || (ncol(df) == 15) || (ncol(df) == 17), &quot;detail&quot;,&quot;summary&quot;)
+  df &lt;- cbind(df,datatype) 
+  df}, mylist3, SIMPLIFY=F)
+
+mylist4 &lt;- mapply(cbind, mylist4, &quot;foodtype&quot; = names(mylist4), SIMPLIFY=F)
+mylist4 &lt;- mapply(cbind, mylist4, &quot;datasource&quot; = path_name, SIMPLIFY=F)
+
+#list2env(mylist4 ,.GlobalEnv)
+
+
+#add missing columns to each dataframe as blank so that they will have the 
+#same amount as the max which is 17 per above
+
+
+mylist5 &lt;- lapply(mylist4, function(df){
+  col_list &lt;- c(&quot;year&quot;,&quot;primaryweight_lbyr&quot;,&quot;lossretail_percent&quot;,&quot;retail_lbyr&quot;,&quot;lossconsumer_percent&quot;,&quot;consumer_lbyr&quot;,
+            &quot;consumer_nonedibleloss_percent&quot;,&quot;consumer_cookingloss_percent&quot;,&quot;totalloss_percent&quot;,&quot;percapita_lbyr&quot;,
+            &quot;percapita_gallonsyr&quot;,&quot;percapita_unitday&quot;,&quot;percapita_gday&quot;,&quot;caloriesperunit&quot;,&quot;unit_equiv&quot;,&quot;calories_daily&quot;,
+            &quot;foodpattern_uniteqiv&quot;,&quot;daily_fat_g&quot;)
+
+  add &lt;-col_list[!col_list%in%names(df)]
+  
+  if(length(add)!=0) df[add] &lt;- NA
+  df
+}
+)
+
+#list2env(mylist5 ,.GlobalEnv)
+
+
+#reorder the variables so they are all in the same order and can be rbinded together
+mylist5.5 &lt;- lapply(mylist5, function(df){
+  
+  col_list &lt;- c(&quot;year&quot;,&#39;datatype&#39;,&#39;foodtype&#39;,&#39;datasource&#39;,&quot;primaryweight_lbyr&quot;,&quot;lossretail_percent&quot;,&quot;retail_lbyr&quot;,&quot;lossconsumer_percent&quot;,&quot;consumer_lbyr&quot;,
+    &quot;consumer_nonedibleloss_percent&quot;,&quot;consumer_cookingloss_percent&quot;,&quot;totalloss_percent&quot;,&quot;percapita_lbyr&quot;,
+    &quot;percapita_gallonsyr&quot;,&quot;percapita_unitday&quot;,&quot;percapita_gday&quot;,&quot;caloriesperunit&quot;,&quot;unit_equiv&quot;,&quot;calories_daily&quot;,
+    &quot;foodpattern_uniteqiv&quot;,&quot;daily_fat_g&quot;)
+  
+  df[col_list]
+  
+  })
+
+
+#rbind all the individual food dataframes together into one long dataframe for each food type
+
+#if the loop has not yet created the list, create it
+if(i == 1){
+mylist6 &lt;- list()
+}
+
+mylist6[[i]] &lt;- assign(paste(&#39;food_data_&#39;,path_name,sep=&quot;&quot;),do.call(&quot;rbind&quot;, mylist5.5))
+
+
+}</code></pre>
+</div>
