@@ -1,14 +1,14 @@
 ---
 title: 'We Are What We Eat: Getting the Data into R'
 author: Lauren
-date: '2018-10-03'
+date: '2018-10-14'
 slug: we-are-what-we-eat-getting-the-data-into-r
 categories: 
   - American Diet
 tags:
   - Data cleaning
   - R
-  - Excel
+  - Readxl
   - Web Scraping
   - Rvest
 description: ''
@@ -19,80 +19,109 @@ linktitle: ''
 type: 'post'
 ---
 
-## Getting the USDA Data From Excel Spreadsheets
+After reading several articles [here](http://www.pewresearch.org/fact-tank/2016/12/13/whats-on-your-table-how-americas-diet-has-changed-over-the-decades/), [here](https://www.vox.com/science-and-health/2017/2/2/14485226/americans-avocado-consumption-usda-report?mc_cid=dba0fc78bc&mc_eid=8f698ac693), and [here](https://cspinet.org/resource/changing-american-diet-0), I was inspired to investigate the USDA's [food availability and consumption data](https://www.ers.usda.gov/data-products/food-availability-per-capita-data-system/food-availability-per-capita-data-system/#Food%20Availability%20in%20CSV%20Format), myself and decided to make it a cornerstone of my first project for this blog!  
 
-After reading several articles here, here, and here, I was inspired to investigate the USDA's food
-production and consumption data myself.  Most of the articles used food
-production for their analysis (this data is provided by USDA in a csv file), but I wanted to instead
-focus on consumption which the USDA has calculated by subtracting their estimates for food loss.
-For example, food can be lost XXXX.
-
-However, the consumption data only exists in Excel spreadsheets, which I had not yet had to deal with
-in R.  This was a learning experience for me and thanks to the great work of Hadley Wickham (yet again)
-and his readxl package, this task was made much easier than it otherwise would have been.
+This post is going to outline the steps I took to gather two of the sources of data I use in the project: the USDA consumption estimates available in Excel files and Harris Poll data on American eating habits scraped from the web.
 
 
+## Importing the USDA Data From Excel Spreadsheets
 
+Most of the articles I've linked above primarily use food availability for their analyses on changing diets. Availability data is provided by the USDA in easy to use, separate, csv files per food group.  However for my analysis, I wanted to instead focus on *consumption*, which is a better proxy for what Americans are actually eating, not just what is available. The USDA estimates consumption by subtracting estimated food loss from the food's availability. Specifically, food can be lost from the production level to the retail level and from the retail level to the consumer level. At the consumer level, food is lost further due to inedible components and general food waste.
 
-```{r message=FALSE, warning=FALSE}
+I found that the loss-adjusted availability data only exists in Excel spreadsheets- a new type of file to load into R for me.  This was therefore a great learning experience in how to import data from Excel files. Thanks to the excellent work of [Hadley Wickham](https://www.r-bloggers.com/hadley-wickham-on-why-he-created-all-those-r-packages/) (he's always saving the day, isn't he?) and his `readxl` package, the task was made much easier than it otherwise would have been.
+
+###Summary of Data Loading and Cleaning Process
+
+Since luckily, the .xls files had very similar formatting (although there were some differences which require somewhat hacky work-arounds as I explain below), I was able to create a decently generalized process to load and clean all the files.  My process was to loop through and load each of the .xls files from the directory and perform a series of steps on them to process and clean the data.  
+
+The major steps are as follows:
+
+1. Identify the .xls files and start the for loop that will process each file
+2. Set the path and retrieve the sheetnames
+3. Read each sheet as a dataframe into a list
+4. Clean the dataframes within the list, renaming columns appropriately
+5. Add identifier columns to each dataframe containing metadata about the source of that dataframe
+6. Ensure the same number and order of columns throughout the list of dataframes
+7. Rbind the dataframes associated with the same Excel file together
+8. Rbind the dataframes created for each Excel file together and do some final data cleaning
+
+To start, I load the package I will be using, as discussed above.
+
+```{r message=FALSE, warning=FALSE, eval=FALSE}
 library(readxl)
-library(dplyr)
-library(rvest)
+```
+
+###1. Identify the .xls files and start the for loop that will process each file
+
+Then, I set my working directory *(although not shown in code here)* and identify all of the files that I am going to want to read into R by the .xls extension.  The files are **Dairy.xls**, **fat.xls**, **Fruit.xls**, **grain.xls**, **meat.xls**, **sugar.xls**, and **veg.xls**.  Each Excel file contains a sheet for each type of food in that general food group that the USDA tracks.  Each sheet contains data from 1970 through 2015 on availability, waste, and consumption (to varying degrees of completeness).
+
+I then initiate a `for` loop that will encompass the majority of the code until I specify that I am "closing" the loop.  For each .xls file in my specifed directory, the code will complete each subsequent step that I outlined in my summary above.
+
+```{r warning=FALSE, message=FALSE, eval=FALSE}
+
+filenames = dir(pattern="*.xls")
+for(i in 1:length(filenames)) {
+```
+
+
+###2. Set the path and retrieve the sheetnames
+
+The first step within the `for` loop for each file is setting the path to be the name of the file that the loop is currently iterating through.  I then remove the `.xls` ending from the file and save that to the variable `path_name`, which I will use later during the data cleaning step, to keep track of which file each row of data came from.  I then parse the sheetnames into the `sheetnames` list variable.
+
+```{r warning=FALSE, message=FALSE, eval=FALSE}
+path <- filenames[i]
+path_name <- gsub("^\\.+|\\.[^.]*$", "", path)
+sheetnames <- excel_sheets(path)
+```
+
+###3. Read each sheet as a dataframe into a list
+
+The next step is to read each sheet of the workbook as a dataframe into a list using `lapply`.  I specify the list `sheetnames` that the `lapply` function will iterate over, the function i want it to apply, which is `read_xls`, and then the optional arguments of `path`, `range`, and `na`.  I tweaked the `range` and `na` arguments through trial and error as I read and validated more and more of the files.  For example, the **Dairy.xls** file had cells containing *"6/"* to denote the notes about Italian cheese which were explained in a footnote below the cells containing actual data.  I wished to turn these cells to NA when importing to R, since the notes didn't constitute actual data on Italian cheese consumption.
+
+
+```{r warning=FALSE, message=FALSE,eval=FALSE}
+dflist <- lapply(sheetnames, read_xls, path = path, range = "A6:Q52", na = c("","6/","NA","N/A"))
+```
+
+After each sheet was read into the list, I renamed each element to be the proper sheet name as is seen below.  I then removed the *"Table of Contents"* since that did not contain any relevant data.  While I was building out the process, I would check my progress by sending the list I was currently working with to the Global Environment with `list2env(current_list ,.GlobalEnv)`.  This allowed me to validate that each step was working correctly.
+
+```{r warning=FALSE, message=FALSE,eval=FALSE}
+names(dflist) <- sheetnames
+
+dflist <- dflist[names(dflist) != 'TableOfContents']
 
 ```
 
-```{r warning=FALSE}
+###4. Clean the dataframes within the list, renaming columns appropriately
 
-setwd('/Users/laureniannolo/Documents/datasets/American Diets Over Time/data/')
-filenames = dir(pattern="*.xls")
-for( i in 1:length(filenames) )
-{
+At this point, I have a list of dataframes created from the sheets within the file, where each dataframe contains data on one type of food and is named according to that food.  
 
+The next step is to remove columns that contained mostly NA values from each dataframe in the list.  I did this because I had to set the `range` variable in the `lapply` function above to be equal to the range needed for the widest/longest data-filled sheet in any of the files.  Thus, there were plenty of sheets that did not have relevant data in some of the specified rows/columns and pulled in with extra, blank columns.  I will discuss the differences in the rows/columns of the types of sheets more in the next step. In case a nonmaterial value snuck into one of these extra columns, I set the threshold for a column to be removed at 90% NAs as is seen below.
 
-path <- filenames[i]
-path_name <- gsub("^\\.+|\\.[^.]*$", "", path) #get rid of .xls
-sheetnames <- excel_sheets(path)
-
-mylist <- lapply(excel_sheets(path), read_xls, path = path, range = "A6:Q52", na = c("","6/","NA","N/A")) #/6 is for the notes about italian cheese
-
-# name the dataframes using the sheetnames
-
-names(mylist) <- sheetnames
-
-#remove the table of contents from the list
-mylist <- mylist[names(mylist) != 'TableOfContents']
-
-
-#list2env(mylist ,.GlobalEnv)
-
-
-#iterate over all the dataframes in the list and remove columns that are completely NA,
-#using 90% of column as NA as a threshold to be safe
-
+```{r warning=FALSE, message=FALSE,eval=FALSE}
 
 NAthres <- 0.9
 
-mylist2 <- lapply(mylist, function(df) {
+dflist_rmna <- lapply(dflist, function(df) {
   cols <- apply(df, 2, function(x) sum(is.na(x)))
   return(df[, cols < (nrow(df) * NAthres)])
 })
 
-#list2env(mylist2 ,.GlobalEnv)
+```
 
+The next step was to iterate over all the dataframes in the list and name the columns correctly.  This would have been simplest if all the columns were consistent throughout dataframes, but unfortunately they are not.  I quickly realized that there were two main types of sheets within a file: detail sheets and summary sheets.  Detail sheets contain data for a specific food product *(i.e. Plain whole milk)*.  Summary tabs contain data for a sub-group of foods *(i.e. All plain milk, All flavored milk, All beverage milks)*. In general, summary sheets have less columns than detail sheets.  
 
+Additionally, some food groups had more or less columns in their summary and detail sheets.  For example, since juice and milk are liquids, they have added columns of gallons per year in addition to pounds per year.  I added in this and other edge cases while validating the data against the spreadsheets in later iterations of the data cleaning process since they were not immediately obvious upon beginning working with the data.  The code below checks how many columns are in the dataframe as an indicator of the type of food that dataframe contains and then names the columns correctly.
 
-#then iterate over all the dataframes in the list and name the columns correctly
-#depending on if they are a summary tab or a detail tab
-#added in edge cases after first iteration to handle some different formatting of tabs
+```{r warning=FALSE, message=FALSE,eval=FALSE}
 
-mylist3 <- lapply(mylist2, function(df) {
-  ifelse(ncol(df) == 16, 
-    #for detail tabs in all files but fat and juice
+dflist_namedcols <- lapply(dflist_rmna, function(df) {
+  ifelse(ncol(df) == 16, #for detail tabs in all files except fat and juice
     colnames(df)<- c("year","primaryweight_lbyr","lossretail_percent","retail_lbyr","lossconsumer_percent","consumer_lbyr",
                      "consumer_nonedibleloss_percent","consumer_cookingloss_percent","totalloss_percent","percapita_lbyr",
                      "percapita_unitday","percapita_gday","caloriesperunit","unit_equiv","calories_daily","foodpattern_uniteqiv"),
   
-  ifelse(ncol(df) == 15, #15 is for fat which is missing foodpattern_uniteqiv for detailed tabs and has daily_fat_g
+  ifelse(ncol(df) == 15, #15 is for fat which is missing foodpattern_uniteqiv for detailed tabs and additionally has daily_fat_g
     colnames(df)<- c("year","primaryweight_lbyr","lossretail_percent","retail_lbyr","lossconsumer_percent","consumer_lbyr",
                      "consumer_nonedibleloss_percent","consumer_cookingloss_percent","totalloss_percent","percapita_lbyr",
                      "percapita_unitday","percapita_gday","caloriesperunit","daily_fat_g","calories_daily"),
@@ -107,11 +136,11 @@ mylist3 <- lapply(mylist2, function(df) {
     colnames(df)<- c("year","primaryweight_lbyr","retail_lbyr","consumer_lbyr","totalloss_percent","percapita_lbyr",
                      "percapita_gallonsyr","percapita_unitday","percapita_gday","calories_daily","foodpattern_uniteqiv"),
     
-  ifelse(ncol(df) == 10,  #10 is for summary fat which is missing foodpattern_uniteqiv and has daily_fat_g
+  ifelse(ncol(df) == 10,  #10 is for summary fat which is missing foodpattern_uniteqiv and additionally has daily_fat_g
     colnames(df)<- c("year","primaryweight_lbyr","retail_lbyr","consumer_lbyr","totalloss_percent","percapita_lbyr",
                             "percapita_unitday","percapita_gday","daily_fat_g","calories_daily"),
     
-    #for summary tabs except fruit juice and fat
+  #implied else: for summary tabs except fruit juice and fat
     colnames(df)<- c("year","primaryweight_lbyr","retail_lbyr","consumer_lbyr","totalloss_percent","percapita_lbyr",
                      "percapita_unitday","percapita_gday","calories_daily","foodpattern_uniteqiv")
     
@@ -120,44 +149,55 @@ mylist3 <- lapply(mylist2, function(df) {
   df
 })
 
-#list2env(mylist3 ,.GlobalEnv)
+```
 
-#add three additional columns, one with the name of the dataframe, one with the name of the
-#excel spreadsheet, and one with either "summary" or "detail"
 
-mylist4 <- mapply(function(df) {
-  "datatype" = ifelse((ncol(df) == 16) || (ncol(df) == 15) || (ncol(df) == 17), "detail","summary")
+###5. Add identifier columns to each dataframe containing metadata about the source of that dataframe
+
+Then, in anticipation of the fact that I am eventually going to combine the dataframes into one large dataframe, I wanted to add three additional columns with information regarding the source of the data.  I have added one with the name of the dataframe (i.e. `foodtype`) , one with the name of the Excel file the dataframe came from (i.e. `datasource`, e.g. the `path_name`: **"Dairy"**, **"meat"**, **"fat"**, etc), and one with either "summary" or "detail" depending on the nature of the data (i.e. `datatype`).  These columns repeat the same relevant keyword for each row in that dataframe.  This way, when I eventually bind the rows of the dataframes together, these properties are not lost.
+
+I again use the number of columns as an indicator of which type of data is held in that dataframe, specifying that if a dataframe has 15, 16, or 17 columns, then it is a detail dataframe, otherwise it is a summary dataframe.  I use `cbind` with `mapply` to attach these new columns to the existing dataframes.   
+
+```{r warning=FALSE, message=FALSE,eval=FALSE}
+dflist_addedcols <- mapply(function(df) {
+  "datatype" = ifelse((ncol(df) == 15) || (ncol(df) == 16) || (ncol(df) == 17), "detail","summary")
   df <- cbind(df,datatype) 
-  df}, mylist3, SIMPLIFY=F)
+  df}, dflist_namedcols, SIMPLIFY=F)
 
-mylist4 <- mapply(cbind, mylist4, "foodtype" = names(mylist4), SIMPLIFY=F)
-mylist4 <- mapply(cbind, mylist4, "datasource" = path_name, SIMPLIFY=F)
+dflist_addedcols <- mapply(cbind, dflist_addedcols, "foodtype" = names(dflist_addedcols), SIMPLIFY=F)
+dflist_addedcols <- mapply(cbind, dflist_addedcols, "datasource" = path_name, SIMPLIFY=F)
 
-#list2env(mylist4 ,.GlobalEnv)
-
-
-#add missing columns to each dataframe as blank so that they will have the 
-#same amount as the max which is 17 per above
+```
 
 
-mylist5 <- lapply(mylist4, function(df){
+###6. Ensure the same number and order of columns throughout the list of dataframes
+
+As discussed above, not all of the dataframes had the same number of columns.  In order to remedy this and be able to use `rbind` in the future, I must add in the missing columns to each dataframe as `NA`.  This way each dataframe will have 20 columns (the maximum amount in any dataframe after adding the 3 new columns).  The below code compares the names of the columns in each dataframe to the master `col_list`, adds any columns that dataframe is missing as NA, and returns the new dataframe in another list.
+
+
+```{r warning=FALSE, message=FALSE,eval=FALSE}
+
+dflist_addedcols2 <- lapply(dflist_addedcols, function(df){
   col_list <- c("year","primaryweight_lbyr","lossretail_percent","retail_lbyr","lossconsumer_percent","consumer_lbyr",
             "consumer_nonedibleloss_percent","consumer_cookingloss_percent","totalloss_percent","percapita_lbyr",
             "percapita_gallonsyr","percapita_unitday","percapita_gday","caloriesperunit","unit_equiv","calories_daily",
             "foodpattern_uniteqiv","daily_fat_g")
 
-  add <-col_list[!col_list%in%names(df)]
+  add <-col_list[!col_list %in% names(df)]
   
   if(length(add)!=0) df[add] <- NA
+  
   df
 }
 )
 
-#list2env(mylist5 ,.GlobalEnv)
+```
 
 
-#reorder the variables so they are all in the same order and can be rbinded together
-mylist5.5 <- lapply(mylist5, function(df){
+Next, I reorder the columns in each dataframe so they are all in the same order and can be rbinded together.
+
+```{r warning=FALSE, message=FALSE,eval=FALSE}
+dflist_reordercols <- lapply(dflist_addedcols2, function(df){
   
   col_list <- c("year",'datatype','foodtype','datasource',"primaryweight_lbyr","lossretail_percent","retail_lbyr","lossconsumer_percent","consumer_lbyr",
     "consumer_nonedibleloss_percent","consumer_cookingloss_percent","totalloss_percent","percapita_lbyr",
@@ -168,17 +208,95 @@ mylist5.5 <- lapply(mylist5, function(df){
   
   })
 
+```
 
-#rbind all the individual food dataframes together into one long dataframe for each food type
+###7. Rbind the dataframes associated with the same Excel file together
 
-#if the loop has not yet created the list, create it
+Lastly, I `rbind` all the individual food dataframes together into one long dataframe for each (former) Excel file, using the `path_name` and add these dataframes to yet another list.  If this list has not yet been created (i.e. it's the `for` loop's first iteration, I create it).  After I add to this final list, I close the `for` loop with a closing bracket.
+
+
+```{r warning=FALSE, message=FALSE,eval=FALSE}
 if(i == 1){
-mylist6 <- list()
+  dflist_finished <- list()
 }
 
-mylist6[[i]] <- assign(paste('food_data_',path_name,sep=""),do.call("rbind", mylist5.5))
-
+dflist_finished[[i]] <- assign(paste('food_data_', path_name, sep=""),do.call("rbind", dflist_reordercols))
 
 }
 
 ```
+
+###8. Rbind the dataframes created for each Excel file together and do some final data cleaning
+
+Finally, I combine the dataframes created by each iteration of the loop into the final dataframe.  Then, I do some cleaning to polish up the data and we are finished!  Now, we have one dataframe called `all_food` with all of the columns that were present in the Excel spreadsheets (plus extra identifier columns created above) that is tidy and ready for analyzing.
+
+```{r warning=FALSE, message=FALSE,eval=FALSE}
+
+
+all_food <- do.call("rbind", dflist_finished) #create final dataframe
+
+rownames(all_food) <- c() #get rid of row names and replace with numbers
+
+all_food <- all_food[nchar(all_food$year) < 5, ] #get rid of extra lines caused by cheese notes
+
+all_food <- all_food[!is.na(all_food$datasource),] #get rid of completely blank lines due to fat not being available after 2010 in some cases
+
+all_food$datasource <- capitalize(all_food$datasource) #to make all naming consistent
+
+all_food$year <- as.numeric(all_food$year) #converting to numeric for plotting
+```
+
+
+## Scraping the Harris Poll Data from HTML Tables
+
+Thanks to another package by Hadley, called `rvest`, I was easily able to scrape [Harris Poll data](https://theharrispoll.com/new-york-n-y-june-10-2014-most-americans-87-say-theyre-making-an-effort-to-eat-healthy-and-with-good-reason-as-a-majority-say-they-or-someone-in-their-household-monitor-or-restrict-their-2/) from the web into R.  To scrape an HTML table, all you need to do is add the `xpath` of the table you'd like to scrape to a few lines of code. You can find the xpath by right clicking a spot on the page, and selecting `"Inspect"` (at least that's what it's called in Google Chrome). Then, as you hover over the elements in the HTML window that has opened, different sections of the page become highlighted.  When you have found the line that highlights the whole table you'd like, you right click it and select `"Copy -> Copy XPath"`. Be sure to just copy the path of the table in general, not of specific HTML tags within the table.  If the table is selected correctly, the xpath should end with `/table`.  Once you specify the xpath as I have done below, the code takes care of the rest of the scraping.  Then, you are free to rename columns and clean the data as you'd like.  I detail the steps below:
+
+
+First, I load the packages used for this portion of the analysis.
+
+```{r warning=FALSE, message=FALSE}
+library(rvest)
+```
+
+Then, I specify the URL that contains the table I'd like to scrape, which for this example is the one titled:
+**"TABLE 1a: IMPORTANT WHEN MAKING FOOD AND BEVERAGE PURCHASES"**.  You can see that I have also set the xpath variable equal to the path I collected using the method described above.
+
+```{r warning=FALSE, message=FALSE}
+
+url <- "https://theharrispoll.com/new-york-n-y-june-10-2014-most-americans-87-say-theyre-making-an-effort-to-eat-healthy-and-with-good-reason-as-a-majority-say-they-or-someone-in-their-household-monitor-or-restrict-their-2/"
+
+
+harris_1a <- url %>%
+  read_html() %>%
+  html_nodes(xpath='//*[@id="post-2099"]/div[2]/div[1]/table') %>%
+  html_table()
+harris_1a <- harris_1a[[1]]
+head(harris_1a)
+```
+
+Success! By previewing the data with `head()`, we can see that it has scraped correctly, but the way it named the columns is not ideal.
+
+Next, I clean the headers by making them all lowercase, removing parentheses, and putting in underscores where spaces are.  Then I preview my data again to make sure the headers look as I want.
+
+```{r warning=FALSE, message=FALSE}
+
+harris_1a[1,1] <- 'Purchase Factor'
+
+harris_1a[1,] <- tolower(harris_1a[1,])
+harris_1a[1,] <- gsub(" ", "_", harris_1a[1,])
+harris_1a[1,] <- gsub("\\(", "", harris_1a[1,])
+harris_1a[1,] <- gsub(")", "", harris_1a[1,])
+
+colnames(harris_1a) <- as.character(unlist(harris_1a[1,]))
+harris_1a <- harris_1a[-1:-2,]
+head(harris_1a)
+
+```
+
+Looks good!
+
+To collect all the Harris Poll results, I repeated this process of scraping the data and renaming the column headers for the remaining Harris Poll tables. I also collected data from **Google Trends** that I imported as CSV files, but am not going to show that process as it was more manual.  
+
+I plan on presenting the results of my analysis in a series of future posts.  Stay tuned!
+
+

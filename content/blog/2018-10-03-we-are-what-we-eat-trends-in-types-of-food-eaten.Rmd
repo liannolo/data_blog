@@ -1,7 +1,7 @@
 ---
 title: 'We Are What We Eat: Trends in Types of Food Eaten'
 author: Lauren
-date: '2018-10-04'
+date: '2018-10-20'
 slug: we-are-what-we-eat-trends-in-types-of-food-eaten
 categories:
   - American Diet
@@ -16,5 +16,5 @@ linktitle: ''
 type: 'post'
 ---
 
-Hello.
+Stay Tuned!
 

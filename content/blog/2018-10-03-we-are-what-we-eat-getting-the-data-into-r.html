@@ -1,14 +1,14 @@
 ---
 title: 'We Are What We Eat: Getting the Data into R'
 author: Lauren
-date: '2018-10-03'
+date: '2018-10-14'
 slug: we-are-what-we-eat-getting-the-data-into-r
 categories: 
   - American Diet
 tags:
   - Data cleaning
   - R
-  - Excel
+  - Readxl
   - Web Scraping
   - Rvest
 description: ''
@@ -21,63 +21,71 @@ type: 'post'
 
 
 
-<div id="getting-the-usda-data-from-excel-spreadsheets" class="section level2">
-<h2>Getting the USDA Data From Excel Spreadsheets</h2>
-<p>After reading several articles here, here, and here, I was inspired to investigate the USDA’s food production and consumption data myself. Most of the articles used food production for their analysis (this data is provided by USDA in a csv file), but I wanted to instead focus on consumption which the USDA has calculated by subtracting their estimates for food loss. For example, food can be lost XXXX.</p>
-<p>However, the consumption data only exists in Excel spreadsheets, which I had not yet had to deal with in R. This was a learning experience for me and thanks to the great work of Hadley Wickham (yet again) and his readxl package, this task was made much easier than it otherwise would have been.</p>
-<pre class="r"><code>library(readxl)
-library(dplyr)
-library(rvest)</code></pre>
-<pre class="r"><code>setwd(&#39;/Users/laureniannolo/Documents/datasets/American Diets Over Time/data/&#39;)
-filenames = dir(pattern=&quot;*.xls&quot;)
-for( i in 1:length(filenames) )
-{
+<p>After reading several articles <a href="http://www.pewresearch.org/fact-tank/2016/12/13/whats-on-your-table-how-americas-diet-has-changed-over-the-decades/">here</a>, <a href="https://www.vox.com/science-and-health/2017/2/2/14485226/americans-avocado-consumption-usda-report?mc_cid=dba0fc78bc&amp;mc_eid=8f698ac693">here</a>, and <a href="https://cspinet.org/resource/changing-american-diet-0">here</a>, I was inspired to investigate the USDA’s <a href="https://www.ers.usda.gov/data-products/food-availability-per-capita-data-system/food-availability-per-capita-data-system/#Food%20Availability%20in%20CSV%20Format">food availability and consumption data</a>, myself and decided to make it a cornerstone of my first project for this blog!</p>
+<p>This post is going to outline the steps I took to gather two of the sources of data I use in the project: the USDA consumption estimates available in Excel files and Harris Poll data on American eating habits scraped from the web.</p>
+<div id="importing-the-usda-data-from-excel-spreadsheets" class="section level2">
+<h2>Importing the USDA Data From Excel Spreadsheets</h2>
+<p>Most of the articles I’ve linked above primarily use food availability for their analyses on changing diets. Availability data is provided by the USDA in easy to use, separate, csv files per food group. However for my analysis, I wanted to instead focus on <em>consumption</em>, which is a better proxy for what Americans are actually eating, not just what is available. The USDA estimates consumption by subtracting estimated food loss from the food’s availability. Specifically, food can be lost from the production level to the retail level and from the retail level to the consumer level. At the consumer level, food is lost further due to inedible components and general food waste.</p>
+<p>I found that the loss-adjusted availability data only exists in Excel spreadsheets- a new type of file to load into R for me. This was therefore a great learning experience in how to import data from Excel files. Thanks to the excellent work of <a href="https://www.r-bloggers.com/hadley-wickham-on-why-he-created-all-those-r-packages/">Hadley Wickham</a> (he’s always saving the day, isn’t he?) and his <code>readxl</code> package, the task was made much easier than it otherwise would have been.</p>
+<div id="summary-of-data-loading-and-cleaning-process" class="section level3">
+<h3>Summary of Data Loading and Cleaning Process</h3>
+<p>Since luckily, the .xls files had very similar formatting (although there were some differences which require somewhat hacky work-arounds as I explain below), I was able to create a decently generalized process to load and clean all the files. My process was to loop through and load each of the .xls files from the directory and perform a series of steps on them to process and clean the data.</p>
+<p>The major steps are as follows:</p>
+<ol style="list-style-type: decimal">
+<li>Identify the .xls files and start the for loop that will process each file</li>
+<li>Set the path and retrieve the sheetnames</li>
+<li>Read each sheet as a dataframe into a list</li>
+<li>Clean the dataframes within the list, renaming columns appropriately</li>
+<li>Add identifier columns to each dataframe containing metadata about the source of that dataframe</li>
+<li>Ensure the same number and order of columns throughout the list of dataframes</li>
+<li>Rbind the dataframes associated with the same Excel file together</li>
+<li>Rbind the dataframes created for each Excel file together and do some final data cleaning</li>
+</ol>
+<p>To start, I load the package I will be using, as discussed above.</p>
+<pre class="r"><code>library(readxl)</code></pre>
+</div>
+<div id="identify-the-.xls-files-and-start-the-for-loop-that-will-process-each-file" class="section level3">
+<h3>1. Identify the .xls files and start the for loop that will process each file</h3>
+<p>Then, I set my working directory <em>(although not shown in code here)</em> and identify all of the files that I am going to want to read into R by the .xls extension. The files are <strong>Dairy.xls</strong>, <strong>fat.xls</strong>, <strong>Fruit.xls</strong>, <strong>grain.xls</strong>, <strong>meat.xls</strong>, <strong>sugar.xls</strong>, and <strong>veg.xls</strong>. Each Excel file contains a sheet for each type of food in that general food group that the USDA tracks. Each sheet contains data from 1970 through 2015 on availability, waste, and consumption (to varying degrees of completeness).</p>
+<p>I then initiate a <code>for</code> loop that will encompass the majority of the code until I specify that I am “closing” the loop. For each .xls file in my specifed directory, the code will complete each subsequent step that I outlined in my summary above.</p>
+<pre class="r"><code>filenames = dir(pattern=&quot;*.xls&quot;)
+for(i in 1:length(filenames)) {</code></pre>
+</div>
+<div id="set-the-path-and-retrieve-the-sheetnames" class="section level3">
+<h3>2. Set the path and retrieve the sheetnames</h3>
+<p>The first step within the <code>for</code> loop for each file is setting the path to be the name of the file that the loop is currently iterating through. I then remove the <code>.xls</code> ending from the file and save that to the variable <code>path_name</code>, which I will use later during the data cleaning step, to keep track of which file each row of data came from. I then parse the sheetnames into the <code>sheetnames</code> list variable.</p>
+<pre class="r"><code>path &lt;- filenames[i]
+path_name &lt;- gsub(&quot;^\\.+|\\.[^.]*$&quot;, &quot;&quot;, path)
+sheetnames &lt;- excel_sheets(path)</code></pre>
+</div>
+<div id="read-each-sheet-as-a-dataframe-into-a-list" class="section level3">
+<h3>3. Read each sheet as a dataframe into a list</h3>
+<p>The next step is to read each sheet of the workbook as a dataframe into a list using <code>lapply</code>. I specify the list <code>sheetnames</code> that the <code>lapply</code> function will iterate over, the function i want it to apply, which is <code>read_xls</code>, and then the optional arguments of <code>path</code>, <code>range</code>, and <code>na</code>. I tweaked the <code>range</code> and <code>na</code> arguments through trial and error as I read and validated more and more of the files. For example, the <strong>Dairy.xls</strong> file had cells containing <em>“6/”</em> to denote the notes about Italian cheese which were explained in a footnote below the cells containing actual data. I wished to turn these cells to NA when importing to R, since the notes didn’t constitute actual data on Italian cheese consumption.</p>
+<pre class="r"><code>dflist &lt;- lapply(sheetnames, read_xls, path = path, range = &quot;A6:Q52&quot;, na = c(&quot;&quot;,&quot;6/&quot;,&quot;NA&quot;,&quot;N/A&quot;))</code></pre>
+<p>After each sheet was read into the list, I renamed each element to be the proper sheet name as is seen below. I then removed the <em>“Table of Contents”</em> since that did not contain any relevant data. While I was building out the process, I would check my progress by sending the list I was currently working with to the Global Environment with <code>list2env(current_list ,.GlobalEnv)</code>. This allowed me to validate that each step was working correctly.</p>
+<pre class="r"><code>names(dflist) &lt;- sheetnames
 
+dflist &lt;- dflist[names(dflist) != &#39;TableOfContents&#39;]</code></pre>
+</div>
+<div id="clean-the-dataframes-within-the-list-renaming-columns-appropriately" class="section level3">
+<h3>4. Clean the dataframes within the list, renaming columns appropriately</h3>
+<p>At this point, I have a list of dataframes created from the sheets within the file, where each dataframe contains data on one type of food and is named according to that food.</p>
+<p>The next step is to remove columns that contained mostly NA values from each dataframe in the list. I did this because I had to set the <code>range</code> variable in the <code>lapply</code> function above to be equal to the range needed for the widest/longest data-filled sheet in any of the files. Thus, there were plenty of sheets that did not have relevant data in some of the specified rows/columns and pulled in with extra, blank columns. I will discuss the differences in the rows/columns of the types of sheets more in the next step. In case a nonmaterial value snuck into one of these extra columns, I set the threshold for a column to be removed at 90% NAs as is seen below.</p>
+<pre class="r"><code>NAthres &lt;- 0.9
 
-path &lt;- filenames[i]
-path_name &lt;- gsub(&quot;^\\.+|\\.[^.]*$&quot;, &quot;&quot;, path) #get rid of .xls
-sheetnames &lt;- excel_sheets(path)
-
-mylist &lt;- lapply(excel_sheets(path), read_xls, path = path, range = &quot;A6:Q52&quot;, na = c(&quot;&quot;,&quot;6/&quot;,&quot;NA&quot;,&quot;N/A&quot;)) #/6 is for the notes about italian cheese
-
-# name the dataframes using the sheetnames
-
-names(mylist) &lt;- sheetnames
-
-#remove the table of contents from the list
-mylist &lt;- mylist[names(mylist) != &#39;TableOfContents&#39;]
-
-
-#list2env(mylist ,.GlobalEnv)
-
-
-#iterate over all the dataframes in the list and remove columns that are completely NA,
-#using 90% of column as NA as a threshold to be safe
-
-
-NAthres &lt;- 0.9
-
-mylist2 &lt;- lapply(mylist, function(df) {
+dflist_rmna &lt;- lapply(dflist, function(df) {
   cols &lt;- apply(df, 2, function(x) sum(is.na(x)))
   return(df[, cols &lt; (nrow(df) * NAthres)])
-})
-
-#list2env(mylist2 ,.GlobalEnv)
-
-
-
-#then iterate over all the dataframes in the list and name the columns correctly
-#depending on if they are a summary tab or a detail tab
-#added in edge cases after first iteration to handle some different formatting of tabs
-
-mylist3 &lt;- lapply(mylist2, function(df) {
-  ifelse(ncol(df) == 16, 
-    #for detail tabs in all files but fat and juice
+})</code></pre>
+<p>The next step was to iterate over all the dataframes in the list and name the columns correctly. This would have been simplest if all the columns were consistent throughout dataframes, but unfortunately they are not. I quickly realized that there were two main types of sheets within a file: detail sheets and summary sheets. Detail sheets contain data for a specific food product <em>(i.e. Plain whole milk)</em>. Summary tabs contain data for a sub-group of foods <em>(i.e. All plain milk, All flavored milk, All beverage milks)</em>. In general, summary sheets have less columns than detail sheets.</p>
+<p>Additionally, some food groups had more or less columns in their summary and detail sheets. For example, since juice and milk are liquids, they have added columns of gallons per year in addition to pounds per year. I added in this and other edge cases while validating the data against the spreadsheets in later iterations of the data cleaning process since they were not immediately obvious upon beginning working with the data. The code below checks how many columns are in the dataframe as an indicator of the type of food that dataframe contains and then names the columns correctly.</p>
+<pre class="r"><code>dflist_namedcols &lt;- lapply(dflist_rmna, function(df) {
+  ifelse(ncol(df) == 16, #for detail tabs in all files except fat and juice
     colnames(df)&lt;- c(&quot;year&quot;,&quot;primaryweight_lbyr&quot;,&quot;lossretail_percent&quot;,&quot;retail_lbyr&quot;,&quot;lossconsumer_percent&quot;,&quot;consumer_lbyr&quot;,
                      &quot;consumer_nonedibleloss_percent&quot;,&quot;consumer_cookingloss_percent&quot;,&quot;totalloss_percent&quot;,&quot;percapita_lbyr&quot;,
                      &quot;percapita_unitday&quot;,&quot;percapita_gday&quot;,&quot;caloriesperunit&quot;,&quot;unit_equiv&quot;,&quot;calories_daily&quot;,&quot;foodpattern_uniteqiv&quot;),
   
-  ifelse(ncol(df) == 15, #15 is for fat which is missing foodpattern_uniteqiv for detailed tabs and has daily_fat_g
+  ifelse(ncol(df) == 15, #15 is for fat which is missing foodpattern_uniteqiv for detailed tabs and additionally has daily_fat_g
     colnames(df)&lt;- c(&quot;year&quot;,&quot;primaryweight_lbyr&quot;,&quot;lossretail_percent&quot;,&quot;retail_lbyr&quot;,&quot;lossconsumer_percent&quot;,&quot;consumer_lbyr&quot;,
                      &quot;consumer_nonedibleloss_percent&quot;,&quot;consumer_cookingloss_percent&quot;,&quot;totalloss_percent&quot;,&quot;percapita_lbyr&quot;,
                      &quot;percapita_unitday&quot;,&quot;percapita_gday&quot;,&quot;caloriesperunit&quot;,&quot;daily_fat_g&quot;,&quot;calories_daily&quot;),
@@ -92,57 +100,49 @@ mylist3 &lt;- lapply(mylist2, function(df) {
     colnames(df)&lt;- c(&quot;year&quot;,&quot;primaryweight_lbyr&quot;,&quot;retail_lbyr&quot;,&quot;consumer_lbyr&quot;,&quot;totalloss_percent&quot;,&quot;percapita_lbyr&quot;,
                      &quot;percapita_gallonsyr&quot;,&quot;percapita_unitday&quot;,&quot;percapita_gday&quot;,&quot;calories_daily&quot;,&quot;foodpattern_uniteqiv&quot;),
     
-  ifelse(ncol(df) == 10,  #10 is for summary fat which is missing foodpattern_uniteqiv and has daily_fat_g
+  ifelse(ncol(df) == 10,  #10 is for summary fat which is missing foodpattern_uniteqiv and additionally has daily_fat_g
     colnames(df)&lt;- c(&quot;year&quot;,&quot;primaryweight_lbyr&quot;,&quot;retail_lbyr&quot;,&quot;consumer_lbyr&quot;,&quot;totalloss_percent&quot;,&quot;percapita_lbyr&quot;,
                             &quot;percapita_unitday&quot;,&quot;percapita_gday&quot;,&quot;daily_fat_g&quot;,&quot;calories_daily&quot;),
     
-    #for summary tabs except fruit juice and fat
+  #implied else: for summary tabs except fruit juice and fat
     colnames(df)&lt;- c(&quot;year&quot;,&quot;primaryweight_lbyr&quot;,&quot;retail_lbyr&quot;,&quot;consumer_lbyr&quot;,&quot;totalloss_percent&quot;,&quot;percapita_lbyr&quot;,
                      &quot;percapita_unitday&quot;,&quot;percapita_gday&quot;,&quot;calories_daily&quot;,&quot;foodpattern_uniteqiv&quot;)
     
   
   )))))
   df
-})
-
-#list2env(mylist3 ,.GlobalEnv)
-
-#add three additional columns, one with the name of the dataframe, one with the name of the
-#excel spreadsheet, and one with either &quot;summary&quot; or &quot;detail&quot;
-
-mylist4 &lt;- mapply(function(df) {
-  &quot;datatype&quot; = ifelse((ncol(df) == 16) || (ncol(df) == 15) || (ncol(df) == 17), &quot;detail&quot;,&quot;summary&quot;)
+})</code></pre>
+</div>
+<div id="add-identifier-columns-to-each-dataframe-containing-metadata-about-the-source-of-that-dataframe" class="section level3">
+<h3>5. Add identifier columns to each dataframe containing metadata about the source of that dataframe</h3>
+<p>Then, in anticipation of the fact that I am eventually going to combine the dataframes into one large dataframe, I wanted to add three additional columns with information regarding the source of the data. I have added one with the name of the dataframe (i.e. <code>foodtype</code>) , one with the name of the Excel file the dataframe came from (i.e. <code>datasource</code>, e.g. the <code>path_name</code>: <strong>“Dairy”</strong>, <strong>“meat”</strong>, <strong>“fat”</strong>, etc), and one with either “summary” or “detail” depending on the nature of the data (i.e. <code>datatype</code>). These columns repeat the same relevant keyword for each row in that dataframe. This way, when I eventually bind the rows of the dataframes together, these properties are not lost.</p>
+<p>I again use the number of columns as an indicator of which type of data is held in that dataframe, specifying that if a dataframe has 15, 16, or 17 columns, then it is a detail dataframe, otherwise it is a summary dataframe. I use <code>cbind</code> with <code>mapply</code> to attach these new columns to the existing dataframes.</p>
+<pre class="r"><code>dflist_addedcols &lt;- mapply(function(df) {
+  &quot;datatype&quot; = ifelse((ncol(df) == 15) || (ncol(df) == 16) || (ncol(df) == 17), &quot;detail&quot;,&quot;summary&quot;)
   df &lt;- cbind(df,datatype) 
-  df}, mylist3, SIMPLIFY=F)
+  df}, dflist_namedcols, SIMPLIFY=F)
 
-mylist4 &lt;- mapply(cbind, mylist4, &quot;foodtype&quot; = names(mylist4), SIMPLIFY=F)
-mylist4 &lt;- mapply(cbind, mylist4, &quot;datasource&quot; = path_name, SIMPLIFY=F)
-
-#list2env(mylist4 ,.GlobalEnv)
-
-
-#add missing columns to each dataframe as blank so that they will have the 
-#same amount as the max which is 17 per above
-
-
-mylist5 &lt;- lapply(mylist4, function(df){
+dflist_addedcols &lt;- mapply(cbind, dflist_addedcols, &quot;foodtype&quot; = names(dflist_addedcols), SIMPLIFY=F)
+dflist_addedcols &lt;- mapply(cbind, dflist_addedcols, &quot;datasource&quot; = path_name, SIMPLIFY=F)</code></pre>
+</div>
+<div id="ensure-the-same-number-and-order-of-columns-throughout-the-list-of-dataframes" class="section level3">
+<h3>6. Ensure the same number and order of columns throughout the list of dataframes</h3>
+<p>As discussed above, not all of the dataframes had the same number of columns. In order to remedy this and be able to use <code>rbind</code> in the future, I must add in the missing columns to each dataframe as <code>NA</code>. This way each dataframe will have 20 columns (the maximum amount in any dataframe after adding the 3 new columns). The below code compares the names of the columns in each dataframe to the master <code>col_list</code>, adds any columns that dataframe is missing as NA, and returns the new dataframe in another list.</p>
+<pre class="r"><code>dflist_addedcols2 &lt;- lapply(dflist_addedcols, function(df){
   col_list &lt;- c(&quot;year&quot;,&quot;primaryweight_lbyr&quot;,&quot;lossretail_percent&quot;,&quot;retail_lbyr&quot;,&quot;lossconsumer_percent&quot;,&quot;consumer_lbyr&quot;,
             &quot;consumer_nonedibleloss_percent&quot;,&quot;consumer_cookingloss_percent&quot;,&quot;totalloss_percent&quot;,&quot;percapita_lbyr&quot;,
             &quot;percapita_gallonsyr&quot;,&quot;percapita_unitday&quot;,&quot;percapita_gday&quot;,&quot;caloriesperunit&quot;,&quot;unit_equiv&quot;,&quot;calories_daily&quot;,
             &quot;foodpattern_uniteqiv&quot;,&quot;daily_fat_g&quot;)
 
-  add &lt;-col_list[!col_list%in%names(df)]
+  add &lt;-col_list[!col_list %in% names(df)]
   
   if(length(add)!=0) df[add] &lt;- NA
+  
   df
 }
-)
-
-#list2env(mylist5 ,.GlobalEnv)
-
-
-#reorder the variables so they are all in the same order and can be rbinded together
-mylist5.5 &lt;- lapply(mylist5, function(df){
+)</code></pre>
+<p>Next, I reorder the columns in each dataframe so they are all in the same order and can be rbinded together.</p>
+<pre class="r"><code>dflist_reordercols &lt;- lapply(dflist_addedcols2, function(df){
   
   col_list &lt;- c(&quot;year&quot;,&#39;datatype&#39;,&#39;foodtype&#39;,&#39;datasource&#39;,&quot;primaryweight_lbyr&quot;,&quot;lossretail_percent&quot;,&quot;retail_lbyr&quot;,&quot;lossconsumer_percent&quot;,&quot;consumer_lbyr&quot;,
     &quot;consumer_nonedibleloss_percent&quot;,&quot;consumer_cookingloss_percent&quot;,&quot;totalloss_percent&quot;,&quot;percapita_lbyr&quot;,
@@ -151,18 +151,105 @@ mylist5.5 &lt;- lapply(mylist5, function(df){
   
   df[col_list]
   
-  })
-
-
-#rbind all the individual food dataframes together into one long dataframe for each food type
-
-#if the loop has not yet created the list, create it
-if(i == 1){
-mylist6 &lt;- list()
+  })</code></pre>
+</div>
+<div id="rbind-the-dataframes-associated-with-the-same-excel-file-together" class="section level3">
+<h3>7. Rbind the dataframes associated with the same Excel file together</h3>
+<p>Lastly, I <code>rbind</code> all the individual food dataframes together into one long dataframe for each (former) Excel file, using the <code>path_name</code> and add these dataframes to yet another list. If this list has not yet been created (i.e. it’s the <code>for</code> loop’s first iteration, I create it). After I add to this final list, I close the <code>for</code> loop with a closing bracket.</p>
+<pre class="r"><code>if(i == 1){
+  dflist_finished &lt;- list()
 }
 
-mylist6[[i]] &lt;- assign(paste(&#39;food_data_&#39;,path_name,sep=&quot;&quot;),do.call(&quot;rbind&quot;, mylist5.5))
-
+dflist_finished[[i]] &lt;- assign(paste(&#39;food_data_&#39;, path_name, sep=&quot;&quot;),do.call(&quot;rbind&quot;, dflist_reordercols))
 
 }</code></pre>
+</div>
+<div id="rbind-the-dataframes-created-for-each-excel-file-together-and-do-some-final-data-cleaning" class="section level3">
+<h3>8. Rbind the dataframes created for each Excel file together and do some final data cleaning</h3>
+<p>Finally, I combine the dataframes created by each iteration of the loop into the final dataframe. Then, I do some cleaning to polish up the data and we are finished! Now, we have one dataframe called <code>all_food</code> with all of the columns that were present in the Excel spreadsheets (plus extra identifier columns created above) that is tidy and ready for analyzing.</p>
+<pre class="r"><code>all_food &lt;- do.call(&quot;rbind&quot;, dflist_finished) #create final dataframe
+
+rownames(all_food) &lt;- c() #get rid of row names and replace with numbers
+
+all_food &lt;- all_food[nchar(all_food$year) &lt; 5, ] #get rid of extra lines caused by cheese notes
+
+all_food &lt;- all_food[!is.na(all_food$datasource),] #get rid of completely blank lines due to fat not being available after 2010 in some cases
+
+all_food$datasource &lt;- capitalize(all_food$datasource) #to make all naming consistent
+
+all_food$year &lt;- as.numeric(all_food$year) #converting to numeric for plotting</code></pre>
+</div>
+</div>
+<div id="scraping-the-harris-poll-data-from-html-tables" class="section level2">
+<h2>Scraping the Harris Poll Data from HTML Tables</h2>
+<p>Thanks to another package by Hadley, called <code>rvest</code>, I was easily able to scrape <a href="https://theharrispoll.com/new-york-n-y-june-10-2014-most-americans-87-say-theyre-making-an-effort-to-eat-healthy-and-with-good-reason-as-a-majority-say-they-or-someone-in-their-household-monitor-or-restrict-their-2/">Harris Poll data</a> from the web into R. To scrape an HTML table, all you need to do is add the <code>xpath</code> of the table you’d like to scrape to a few lines of code. You can find the xpath by right clicking a spot on the page, and selecting <code>&quot;Inspect&quot;</code> (at least that’s what it’s called in Google Chrome). Then, as you hover over the elements in the HTML window that has opened, different sections of the page become highlighted. When you have found the line that highlights the whole table you’d like, you right click it and select <code>&quot;Copy -&gt; Copy XPath&quot;</code>. Be sure to just copy the path of the table in general, not of specific HTML tags within the table. If the table is selected correctly, the xpath should end with <code>/table</code>. Once you specify the xpath as I have done below, the code takes care of the rest of the scraping. Then, you are free to rename columns and clean the data as you’d like. I detail the steps below:</p>
+<p>First, I load the packages used for this portion of the analysis.</p>
+<pre class="r"><code>library(rvest)</code></pre>
+<p>Then, I specify the URL that contains the table I’d like to scrape, which for this example is the one titled: <strong>“TABLE 1a: IMPORTANT WHEN MAKING FOOD AND BEVERAGE PURCHASES”</strong>. You can see that I have also set the xpath variable equal to the path I collected using the method described above.</p>
+<pre class="r"><code>url &lt;- &quot;https://theharrispoll.com/new-york-n-y-june-10-2014-most-americans-87-say-theyre-making-an-effort-to-eat-healthy-and-with-good-reason-as-a-majority-say-they-or-someone-in-their-household-monitor-or-restrict-their-2/&quot;
+
+
+harris_1a &lt;- url %&gt;%
+  read_html() %&gt;%
+  html_nodes(xpath=&#39;//*[@id=&quot;post-2099&quot;]/div[2]/div[1]/table&#39;) %&gt;%
+  html_table()
+harris_1a &lt;- harris_1a[[1]]
+head(harris_1a)</code></pre>
+<pre><code>##            X1              X2             X3                 X4
+## 1             Important (NET) Very important Somewhat important
+## 2                           %              %                  %
+## 3       Fresh              89             62                 28
+## 4       Fiber              80             39                 41
+## 5 Whole grain              77             41                 36
+## 6    Calories              75             38                 37
+##                    X5                 X6                   X7
+## 1 Not important (NET) Not very important Not at all important
+## 2                   %                  %                    %
+## 3                   8                  3                    5
+## 4                  18                 10                    8
+## 5                  21                 11                    9
+## 6                  23                 13                   10
+##                X8
+## 1 Not at all sure
+## 2               %
+## 3               3
+## 4               3
+## 5               3
+## 6               2</code></pre>
+<p>Success! By previewing the data with <code>head()</code>, we can see that it has scraped correctly, but the way it named the columns is not ideal.</p>
+<p>Next, I clean the headers by making them all lowercase, removing parentheses, and putting in underscores where spaces are. Then I preview my data again to make sure the headers look as I want.</p>
+<pre class="r"><code>harris_1a[1,1] &lt;- &#39;Purchase Factor&#39;
+
+harris_1a[1,] &lt;- tolower(harris_1a[1,])
+harris_1a[1,] &lt;- gsub(&quot; &quot;, &quot;_&quot;, harris_1a[1,])
+harris_1a[1,] &lt;- gsub(&quot;\\(&quot;, &quot;&quot;, harris_1a[1,])
+harris_1a[1,] &lt;- gsub(&quot;)&quot;, &quot;&quot;, harris_1a[1,])
+
+colnames(harris_1a) &lt;- as.character(unlist(harris_1a[1,]))
+harris_1a &lt;- harris_1a[-1:-2,]
+head(harris_1a)</code></pre>
+<pre><code>##   purchase_factor important_net very_important somewhat_important
+## 3           Fresh            89             62                 28
+## 4           Fiber            80             39                 41
+## 5     Whole grain            77             41                 36
+## 6        Calories            75             38                 37
+## 7    Portion size            73             37                 37
+## 8     Fat content            73             39                 34
+##   not_important_net not_very_important not_at_all_important
+## 3                 8                  3                    5
+## 4                18                 10                    8
+## 5                21                 11                    9
+## 6                23                 13                   10
+## 7                24                 14                   10
+## 8                24                 14                   10
+##   not_at_all_sure
+## 3               3
+## 4               3
+## 5               3
+## 6               2
+## 7               3
+## 8               3</code></pre>
+<p>Looks good!</p>
+<p>To collect all the Harris Poll results, I repeated this process of scraping the data and renaming the column headers for the remaining Harris Poll tables. I also collected data from <strong>Google Trends</strong> that I imported as CSV files, but am not going to show that process as it was more manual.</p>
+<p>I plan on presenting the results of my analysis in a series of future posts. Stay tuned!</p>
 </div>
