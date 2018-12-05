@@ -1,0 +1,24 @@
+purchase_factor,2011_total,2014_total,generation_millennials_18_36,generation_gen_xers_37_48,generation_baby_boomers_49_67,generation_matures_68+,gender_male,gender_female,children_in_household_yes,children_in_household_no,effort_to_eat_healthy_great_deal,effort_to_eat_healthy_some,effort_to_eat_healthy_not_much_no_effort
+Fresh,89,89,83,89,93,94,88,91,86,91,96,91,69
+Fiber,81,80,72,79,84,86,77,82,76,81,90,82,46
+Whole grain,81,77,72,76,79,82,73,80,76,77,90,78,39
+Calories,77,75,68,70,81,82,71,79,70,77,85,76,46
+Portion size,79,73,67,69,80,79,71,76,71,75,83,74,49
+Fat content,80,73,62,69,83,81,69,77,66,76,85,74,44
+Sodium or salt,71,71,63,69,75,80,66,75,66,73,82,71,46
+Saturated fat,76,71,61,66,78,80,68,73,67,72,84,70,39
+Dairy,72,69,65,66,71,78,66,72,70,69,73,71,53
+Sugar,72,68,62,65,74,75,65,71,66,69,77,70,42
+Natural,NA,68,68,74,67,60,63,73,71,66,83,67,34
+Carbohydrates,71,67,60,62,74,75,64,70,64,69,77,69,37
+Preservatives,67,61,51,62,67,68,56,66,58,62,73,61,32
+Artificial sugar,59,59,58,60,61,58,56,62,60,59,71,59,33
+High fructose corn syrup,60,59,57,55,63,59,56,62,58,59,72,58,31
+Packaged food,58,54,53,56,55,54,55,54,55,54,58,57,36
+Frozen,52,52,47,51,53,58,46,57,50,52,58,52,37
+Genetically modified food,NA,49,48,51,49,48,45,53,47,50,60,49,24
+Organic,NA,45,55,50,38,35,42,48,51,43,65,41,17
+Glycemic index,NA,38,36,33,43,38,36,40,37,39,48,37,20
+Lactose,NA,31,37,28,28,27,29,32,32,30,39,29,19
+Gluten,33,28,33,23,28,19,27,28,31,26,34,26,19
+Vegan,20,18,27,19,13,12,16,21,23,17,30,14,10

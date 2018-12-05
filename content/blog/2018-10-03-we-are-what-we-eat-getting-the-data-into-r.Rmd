@@ -45,10 +45,11 @@ The major steps are as follows:
 7. Rbind the dataframes associated with the same Excel file together
 8. Rbind the dataframes created for each Excel file together and do some final data cleaning
 
-To start, I load the package I will be using, as discussed above.
+To start, I load the packages I will be using, as discussed above.  R.utils is used for the capitalize function at the end of this code (part of data cleaning).
 
 ```{r message=FALSE, warning=FALSE, eval=FALSE}
 library(readxl)
+library(R.utils)
 ```
 
 ###1. Identify the .xls files and start the for loop that will process each file

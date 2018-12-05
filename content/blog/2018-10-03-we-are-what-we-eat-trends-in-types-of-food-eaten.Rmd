@@ -1,7 +1,7 @@
 ---
 title: 'We Are What We Eat: Trends in Types of Food Eaten'
 author: Lauren
-date: '2018-10-20'
+date: '2018-12-04'
 slug: we-are-what-we-eat-trends-in-types-of-food-eaten
 categories:
   - American Diet
@@ -16,5 +16,847 @@ linktitle: ''
 type: 'post'
 ---
 
-Stay Tuned!
+```{r echo=FALSE, warning=FALSE, message=FALSE}
 
+library(readxl)
+library(R.utils)
+library(ggplot2)
+library(dplyr)
+library(extrafont)
+library(rvest)
+library(scales)
+library(reshape)
+library(forcats)
+library(zoo)
+library(lubridate)
+library(emo)
+library(ggrepel)
+
+#https://stackoverflow.com/questions/39634520/specify-height-and-width-of-ggplot-graph-in-rmarkdown-knitr-output
+
+### USDA Data
+
+filenames = dir(path = "../../static/data/diet/", pattern="*.xls")
+for(i in 1:length(filenames)) {
+  path <- filenames[i]
+  path_name <- gsub("^\\.+|\\.[^.]*$", "", path)
+  sheetnames <- excel_sheets(paste("../../static/data/diet/",path,sep=""))
+  
+  dflist <- lapply(sheetnames, read_xls, path = paste("../../static/data/diet/",path,sep=""), range = "A6:Q52", na = c("","6/","NA","N/A"))
+  
+  names(dflist) <- sheetnames
+
+  dflist <- dflist[names(dflist) != 'TableOfContents']
+
+  NAthres <- 0.9
+
+  dflist_rmna <- lapply(dflist, function(df) {
+  cols <- apply(df, 2, function(x) sum(is.na(x)))
+  return(df[, cols < (nrow(df) * NAthres)])
+  })
+  
+  dflist_namedcols <- lapply(dflist_rmna, function(df) {
+  ifelse(ncol(df) == 16, #for detail tabs in all files except fat and juice
+    colnames(df)<- c("year","primaryweight_lbyr","lossretail_percent","retail_lbyr","lossconsumer_percent","consumer_lbyr",
+                     "consumer_nonedibleloss_percent","consumer_cookingloss_percent","totalloss_percent","percapita_lbyr",
+                     "percapita_unitday","percapita_gday","caloriesperunit","unit_equiv","calories_daily","foodpattern_uniteqiv"),
+  
+  ifelse(ncol(df) == 15, #15 is for fat which is missing foodpattern_uniteqiv for detailed tabs and additionally has daily_fat_g
+    colnames(df)<- c("year","primaryweight_lbyr","lossretail_percent","retail_lbyr","lossconsumer_percent","consumer_lbyr",
+                     "consumer_nonedibleloss_percent","consumer_cookingloss_percent","totalloss_percent","percapita_lbyr",
+                     "percapita_unitday","percapita_gday","caloriesperunit","daily_fat_g","calories_daily"),
+  
+  ifelse(ncol(df) == 17, #17 is for detail fruit juice and milk which has an added column of gallons per year
+    colnames(df)<- c("year","primaryweight_lbyr","lossretail_percent","retail_lbyr","lossconsumer_percent","consumer_lbyr",
+                      "consumer_nonedibleloss_percent","consumer_cookingloss_percent","totalloss_percent","percapita_lbyr",
+                      "percapita_gallonsyr","percapita_unitday","percapita_gday","caloriesperunit","unit_equiv","calories_daily",
+                     "foodpattern_uniteqiv"), 
+  
+  ifelse(ncol(df) == 11,  #11 is for summary juice and milk which has an added column of gallons per year
+    colnames(df)<- c("year","primaryweight_lbyr","retail_lbyr","consumer_lbyr","totalloss_percent","percapita_lbyr",
+                     "percapita_gallonsyr","percapita_unitday","percapita_gday","calories_daily","foodpattern_uniteqiv"),
+    
+  ifelse(ncol(df) == 10,  #10 is for summary fat which is missing foodpattern_uniteqiv and additionally has daily_fat_g
+    colnames(df)<- c("year","primaryweight_lbyr","retail_lbyr","consumer_lbyr","totalloss_percent","percapita_lbyr",
+                            "percapita_unitday","percapita_gday","daily_fat_g","calories_daily"),
+    
+  #implied else: for summary tabs except fruit juice and fat
+    colnames(df)<- c("year","primaryweight_lbyr","retail_lbyr","consumer_lbyr","totalloss_percent","percapita_lbyr",
+                     "percapita_unitday","percapita_gday","calories_daily","foodpattern_uniteqiv")
+    
+  
+  )))))
+  df
+  })
+  
+  
+  dflist_addedcols <- mapply(function(df) {
+  "datatype" = ifelse((ncol(df) == 15) || (ncol(df) == 16) || (ncol(df) == 17), "detail","summary")
+  df <- cbind(df,datatype) 
+  df}, dflist_namedcols, SIMPLIFY=F)
+  
+  dflist_addedcols <- mapply(cbind, dflist_addedcols, "foodtype" = names(dflist_addedcols), SIMPLIFY=F)
+  dflist_addedcols <- mapply(cbind, dflist_addedcols, "datasource" = path_name, SIMPLIFY=F)
+  
+  
+  dflist_addedcols2 <- lapply(dflist_addedcols, function(df){
+  col_list <- c("year","primaryweight_lbyr","lossretail_percent","retail_lbyr","lossconsumer_percent","consumer_lbyr",
+            "consumer_nonedibleloss_percent","consumer_cookingloss_percent","totalloss_percent","percapita_lbyr",
+            "percapita_gallonsyr","percapita_unitday","percapita_gday","caloriesperunit","unit_equiv","calories_daily",
+            "foodpattern_uniteqiv","daily_fat_g")
+  
+  add <-col_list[!col_list %in% names(df)]
+  
+  if(length(add)!=0) df[add] <- NA
+  
+  df
+  }
+  )
+  
+  dflist_reordercols <- lapply(dflist_addedcols2, function(df){
+  
+  col_list <- c("year",'datatype','foodtype','datasource',"primaryweight_lbyr","lossretail_percent","retail_lbyr","lossconsumer_percent","consumer_lbyr",
+    "consumer_nonedibleloss_percent","consumer_cookingloss_percent","totalloss_percent","percapita_lbyr",
+    "percapita_gallonsyr","percapita_unitday","percapita_gday","caloriesperunit","unit_equiv","calories_daily",
+    "foodpattern_uniteqiv","daily_fat_g")
+  
+  df[col_list]
+  
+  })
+  
+  if(i == 1){
+  dflist_finished <- list()
+  }
+  
+  dflist_finished[[i]] <- assign(paste('food_data_', path_name, sep=""),do.call("rbind", dflist_reordercols))
+  
+  }
+  
+all_food <- do.call("rbind", dflist_finished) #create final dataframe
+
+rownames(all_food) <- c() #get rid of row names and replace with numbers
+
+all_food <- all_food[nchar(all_food$year) < 5, ] #get rid of extra lines caused by cheese notes
+
+all_food <- all_food[!is.na(all_food$datasource),] #get rid of completely blank lines due to fat not being available after 2010 in some cases
+
+all_food$datasource <- capitalize(all_food$datasource) #to make all naming consistent
+
+all_food$year <- as.numeric(all_food$year) #converting to numeric for plotting
+  
+
+### Loading in scraped and cleaned Harris Poll Data from CSVs (in case webpage is changed over time)
+
+harris_1a <- read.csv('../../static/data/diet/supp_data/harris_1a.csv', 
+col.names = c('purchase_factor','important_net','very_important','somewhat_important','not_important_net',
+              'not_very_important','not_at_all_important','not_at_all_sure'),
+check.names=FALSE)
+harris_1b <- read.csv('../../static/data/diet/supp_data/harris_1b.csv',
+                      col.names = c('purchase_factor','2011_total','2014_total','generation_millennials_18_36',
+                                    'generation_gen_xers_37_48', 'generation_baby_boomers_49_67',
+                                    'generation_matures_68+','gender_male',
+                                    'gender_female','children_in_household_yes','children_in_household_no',
+                                    'effort_to_eat_healthy_great_deal','effort_to_eat_healthy_some',
+                                    'effort_to_eat_healthy_not_much_no_effort'),
+                      check.names=FALSE)
+harris_3 <- read.csv('../../static/data/diet/supp_data/harris_3.csv',
+                     col.names = c('restricted_item','2011_total','2014_total','generation_millennials_18_36',
+                                    'generation_gen_xers_37_48', 'generation_baby_boomers_49_67',
+                                    'generation_matures_68+','gender_male',
+                                    'gender_female','children_in_household_yes','children_in_household_no'),
+                     check.names=FALSE)
+
+
+
+#to get spices data
+
+filenames = dir(path = "../../static/data/diet/supp_data/spices.xls", pattern="*.xls")
+
+sheetnames <- excel_sheets("../../static/data/diet/supp_data/spices.xls")
+  
+  spices_wkbk <- lapply(excel_sheets("../../static/data/diet/supp_data/spices.xls"), read_xls, path = "../../static/data/diet/supp_data/spices.xls", range = "A6:AK57", na = c("","7/","9/","NA","N/A",""))
+  
+  # name the dataframes using the sheetnames
+  names(spices_wkbk) <- sheetnames
+  
+  #keep only spices sheet
+  spices <- as.data.frame(spices_wkbk[!(names(spices_wkbk) %in% c('TableOfContents','CTCPcc','Coffee','Tea','Cocoa'))])
+
+  spices <- spices[-1,]
+  names(spices) <- c('year','pop_millions','production_mustard_thouslb','production_cachili_thouslb','production_nmchili_thouslb',
+                     'production_totalabovechili_thouslb','production_totalchili_thouslb','imports_anise_thouslb','imports_caraway_thouslb',
+                     'imports_fennel_thouslb','imports_anise_caraway_fennel_thouslb','imports_capsicum_thouslb','imports_cassia_thouslb',
+                     'imports_celery_thouslb','imports_cinnamon_thouslb','imports_cloves_thouslb','imports_corriander_thouslb',
+                     'imports_cumin_thouslb','imports_ginger_thouslb','imports_mace_thouslb','imports_mustard_thouslb',
+                     'imports_nutmeg_thouslb','imports_paprika_thouslb','imports_pepper_thouslb','imports_pimento_thouslb','imports_poppy_thouslb',
+                     'imports_sage_thouslb','imports_sesame_thouslb','imports_turmeric_thouslb','imports_vanilla_thouslb','imports_other_thouslb',
+                     'imports_total_thouslb','use_total_thouslb','use_exports_thouslb','use_topr_thouslb','food_avail_total_thouslb',
+                     'food_avail_percapita_lbs')
+
+  
+
+```
+
+
+To recap, inspired by the articles I linked in my [previous post,](https://www.datamadepretty.com/blog/we-are-what-we-eat-getting-the-data-into-r/) ([here](http://www.pewresearch.org/fact-tank/2016/12/13/whats-on-your-table-how-americas-diet-has-changed-over-the-decades/), [here](https://www.vox.com/science-and-health/2017/2/2/14485226/americans-avocado-consumption-usda-report?mc_cid=dba0fc78bc&mc_eid=8f698ac693), and [here](https://cspinet.org/resource/changing-american-diet-0)), I decided to investigate the USDA's food consumption dataset to get an idea of how Americans' diets have changed over time.  I am also complementing this dataset with Harris Poll and Google Trends data.  In the previous post, I demonstrated how I read the Excel files containing the USDA data into R and scraped the Harris Poll HTML tables.  In this post, I am going to be sharing some interesting findings derived from my data.
+
+##Some Things Have Changed Over The Last 40 Years
+
+
+The first thing that I found interesting about the data that the articles I cited briefly touched on as well, was the dramatic decrease in the consumption of milk since 1970.  When I saw this trend, I was immediately puzzled.  How was there such a dramatic decline over time when there were all those "Got Milk" ads? I swear that growing up, they were everywhere: bus stops, magazines and everyone was wearing the milk mustache, from Serena and Venus Williams to the Olsen twins, so what gives?  It turns out after a little bit of research, I was able to uncover the truth about the "Got Milk?" ads.  While largely popular, they were known to be [highly ineffective](https://www.huffingtonpost.com/gene-del-vecchio/got-milk-got-fired-5-valu_b_4938176.html), but they still ran the campaign for 20 years!
+
+```{r warning=FALSE, message=FALSE, eval=TRUE, echo=FALSE}
+
+#milk down even though "got milk" ad is the most recognized ever
+milk <- all_food[all_food$foodtype %in% c('Plain whole milk','2 percent milk','1 percent milk','Skim milk','All plain milk'),]
+
+flavored_milk <-  all_food[all_food$foodtype %in% c('Whole flavored milk','Lowfat flavored milk','All flavored milk'),]
+milk_summary <- all_food[all_food$foodtype %in% c('All beverage milks','All plain milk','All flavored milk'),]
+
+```
+
+```{r, fig.width=8,fig.height=5, fig.align='center', echo=FALSE, eval=TRUE}
+
+ggplot(data=milk) +
+  geom_rect(data= data.frame(xmin=1993, xmax=2014, ymin=-Inf, ymax=+Inf), aes(xmin=1993, xmax=2014, ymin=-Inf, ymax=+Inf), fill="skyblue", alpha=0.3)+
+  geom_line(aes(x=year, y=percapita_gallonsyr, color = foodtype), size=1)+
+  annotate("label", x=2003, y=10, label= "Got Milk? Campaign \n 1993 - 2014",colour = "deepskyblue4",size = 4, family = "Tahoma")+
+  scale_x_continuous(name = "Year", breaks=seq(1970,2015,5))+
+  scale_y_continuous(name = "Gallons per Capita per Year")+
+  ggtitle("Americans in 2015 Got Less Milk in their Fridge than Before Campaign") +
+  theme_bw()+
+  theme(axis.title.x = element_text(colour="black", size=12),
+        axis.title.y = element_text(colour="black", size=12),
+        plot.title   = element_text(size = 14,colour="deepskyblue4"))+
+  guides(color=guide_legend(title="Types of Plain Milk", override.aes = list(size=2)))
+```
+
+It is no secret that Americans' diets are shifting as American society itself is also changing.  For example, millennials are the most diverse generation yet in American history, with [44% of them identifying as non-white.](https://www.brookings.edu/wp-content/uploads/2018/01/20180124_metro_millennialreport_pressrelease.pdf) Their younger siblings, Generation Z, will be even more diverse in all regards.  Lactose intolerance is actually very [prevalent in most parts of the world](https://ghr.nlm.nih.gov/condition/lactose-intolerance#statistics) and as the majority of Americans come from more diverse backgrounds, it is possible that this could further contribute to declining milk consumption if people prefer to avoid it.  Additionally, while there [may not be conclusive evidence of higher rates of veganism](https://www.washingtonpost.com/news/food/wp/2018/08/03/you-might-think-there-are-more-vegetarians-than-ever-youd-be-wrong/?noredirect=on&utm_term=.79b516951544), there is definitely more awareness around the issue of sustainable agriculture and the impact of food production on the environment.  Increasingly, Americans are opting to make more plant-based choices as campaigns like ["Meatless Monday"](https://www.jhsph.edu/research/centers-and-institutes/johns-hopkins-center-for-a-livable-future/projects/MMP_old/index.html) show.  For example, demand for almond milk has [exploded in recent years](https://www.nielsen.com/us/en/insights/news/2016/americans-are-nuts-for-almond-milk.html) and a new range of products from oat milk to rice milk have come onto the market.
+
+
+A different segment of the milk market, however, has actually grown: flavored milk.  Americans are drinking more flavored milk than they were in 1970 in the form of chocolate and strawberry milk.  These drinks with added sugar and artificial flavorings, typically marketed to children, run contrary to the "healthly milk" trend described above.  While still much above 1970 values, these flavored milks have declined in consumption slightly since their 2010 peak, perhaps due to [greater health awareness](https://www.adelaidenow.com.au/lifestyle/food/warning-about-high-sugar-in-flavoured-milk/news-story/aebb8562488d81e9a4452d23f21c8f38).
+
+```{r warning=FALSE, message=FALSE, eval=TRUE, echo=FALSE, fig.width=8,fig.height=5,fig.align='center'}
+
+ggplot(data=flavored_milk) +
+  geom_line(aes(x=year, y=percapita_gallonsyr, color = foodtype), size=1)+
+  scale_x_continuous(name = "Year", breaks=seq(1970,2015,5))+
+  scale_y_continuous(name = "Gallons per Capita per Year")+
+  ggtitle("Flavored Milk Popularity Has Increased 60% Since 1970") +
+  theme_bw()+
+  theme(axis.title.x = element_text(colour="black", size=12),
+        axis.title.y = element_text(colour="black", size=12),
+        plot.title   = element_text(size = 14,colour="deepskyblue4"))+
+  guides(color=guide_legend(title="Types of Flavored Milk", override.aes = list(size=2)))
+
+```
+
+Unfortunately for the cow's milk industry, these flavored milks though high growth, represent a very small part of the total milk market which is truly very much in decline.  This example also illustrates the importance of always reading the units on a graph's axes `r emo::ji("slightly_smiling_face")`.
+
+```{r warning=FALSE, message=FALSE, eval=TRUE, echo=FALSE, fig.width=8,fig.height=5,fig.align='center'}
+ggplot(data=milk_summary) +
+  geom_line(aes(x=year, y=percapita_gallonsyr, color = foodtype), size=1)+
+  annotate("segment", x = 1985, xend = 1992, y = 5.5, yend = 1.5, colour = "black", size=1, alpha=1, arrow=arrow())+
+  scale_x_continuous(name = "Year", breaks=seq(1970,2015,5))+
+  scale_y_continuous(name = "Gallons per Capita per Year")+
+  ggtitle("However... Flavored Milk is Just a Fraction of the Total Milk Market") +
+  theme_bw()+
+  theme(axis.title.x = element_text(colour="black", size=12),
+        axis.title.y = element_text(colour="black", size=12),
+        plot.title   = element_text(size = 14,colour="deepskyblue4"))+
+  guides(color=guide_legend(title="Types of Milk", override.aes = list(size=2)))
+
+```
+
+
+As mentioned above, Americans are becoming more aware of the impact of food production on the environment and opting for more sustainable alternatives.  It is now well-known that [beef produces more greenhouse gases than poultry](https://www.washingtonpost.com/lifestyle/food/heres-how-much-giving-up-beef-helps--or-doesnt-help--the-planet/2017/07/20/03bb5ba2-6d60-11e7-b9e2-2056e768a7e5_story.html?utm_term=.22ad7bcdca0b) and that substituting at least some beef portions for vegetables or poultry would have a positive impact on the environment.  Many Americans are limiting red meat due to health concerns in addition to environmental concerns.  Red meat consumption has been associated with an [increased risk of heart disease](https://www.newsweek.com/meat-proteins-heart-disease-risk-plant-based-diets-benefit-cardiovascular-869896) (since most of the studies done to date have been observational in nature and thus not causal, the jury is still out but regardless the topic has made many headlines, some as dramatic as ["Is meat killing us?"](https://www.independent.co.uk/news/science/red-meat-processed-meat-death-mortality-health-cancer-heart-disease-vegetarian-vegan-diet-a7016986.html)).  Concurrent with red meat's decline, [chicken's star has been rising ](https://firstwefeast.com/features/2016/08/how-chicken-conquered-america/).  Chicken is generally cheaper than beef, but it has become trendy as [celebrity chefs](https://www.eater.com/2017/1/9/14169560/fried-chicken-trend) clamor to make their own take on the fried chicken sandwich and other classics.  The trend is causing [restaurants once known for selling beef](https://www.businessinsider.com/fried-chicken-is-taking-over-fast-food-2017-1) to sell chicken as well.  For the above reasons, as of the mid-2000s chicken has surpassed beef as America's favorite meat.  Other meat consumption has remained relatively unchanged.  Americans still seem to be infatuated with bacon, which is [having its own renaissance](http://fortune.com/2015/05/19/bacon/) or ["bacon mania,"](https://en.wikipedia.org/wiki/Bacon_mania) popularized over the internet.
+
+
+
+```{r warning=FALSE, message=FALSE, eval=TRUE, echo=FALSE, fig.width=8,fig.height=5,fig.align='center'}
+
+
+meat_categories <-  all_food[all_food$foodtype %in% c('Red meat','Poultry'),]
+specific_meat <- all_food[all_food$foodtype %in% c('Chicken','Turkey','Beef','Veal','Pork','Lamb'),]
+
+ggplot(data=specific_meat) +
+  geom_line(aes(x=year, y=percapita_lbyr, color = foodtype), size=1)+
+  scale_x_continuous(name = "Year", breaks=seq(1970,2015,5))+
+  scale_y_continuous(name = "Pounds per Capita per Year")+
+  ggtitle("Chicken Has Now Surpassed Beef as America's Favorite Meat") +
+  theme_bw()+
+  theme(axis.title.x = element_text(colour="black", size=12),
+        axis.title.y = element_text(colour="black", size=12),
+        plot.title   = element_text(size = 14,colour="deepskyblue4"))+
+  guides(color=guide_legend(title="Types of Meat", override.aes = list(size=2)))
+
+```
+
+
+```{r warning=FALSE, message=FALSE, eval=TRUE, echo=FALSE}
+#mexican foods- avocado, lime, black beans, rice, canned chili peppers since 1980
+#italian foods- eggplant, garlic, tomatoes, mozz cheese, pasta, salad and cooking oils (rachael ray and EVOO)
+#put in quote from mr potter about "garlic eaters"
+#to mr potters dismay, we in fact are now a nation of "garlic eaters"
+#other new foods borrowed from other cultures- lentils 
+
+diverse_food <- all_food[all_food$foodtype %in% c('Fresh avocados','Fresh limes','Canned chile peppers','Fresh garlic','Mozarella cheese','Fresh mushrooms','Fresh artichokes', 'Rice','Salad and cooking oils'),]
+
+diverse_food_index <- diverse_food %>%
+  group_by(foodtype) %>%
+  mutate(index_percapita_lbyr = ifelse(foodtype == 'Canned chile peppers',percapita_lbyr/percapita_lbyr[year==1980]-1,percapita_lbyr/percapita_lbyr[year==1970]-1))
+
+diverse_food_index_label <- diverse_food_index %>%
+  ungroup() %>%
+  filter(!is.na(index_percapita_lbyr)) %>%
+  group_by(foodtype) %>%
+  summarize(latest = max(year), index_percapita_lbyr_max = last(index_percapita_lbyr)) %>%
+  mutate(index_percapita_lbyr_label = paste('+',round(index_percapita_lbyr_max*100,0),'%'))
+
+```
+
+As discussed above, America has diversified greatly over the last 40+ years.  More immigrants from a wide array of continents have brought with them an increased interest in new foods, especially those from Mexico and Latin America.  The below graph shows a handful of foods that have increased in per capita annual consumption.  These are just a basket of foods available in the dataset, but I suspect if data was available on what types of dishes, rather than ingredients, Americans eat inside and outside of the home, we would also see an increase in diversity.  As an Italian American, I am particularly proud to see that the country has fully embraced cooking with garlic. This is a cultural shift from the early 1900s, as seen in "It's a Wonderful Life," when Mr. Potter derides Italians as ["a bunch of garlic eaters"](https://www.npr.org/2012/12/20/167620418/its-a-wonderful-italian-american-life) to George Bailey.  We are now a nation of garlic eaters!
+
+```{r warning=FALSE, message=FALSE, eval=TRUE, echo=FALSE, fig.width=12,fig.height=7,fig.align='center'}
+ggplot(data=diverse_food_index, aes(x=year, y=index_percapita_lbyr, color = foodtype)) +
+  geom_line(size=1)+
+  geom_label(data = diverse_food_index_label, aes(x=latest, y=index_percapita_lbyr_max, label = index_percapita_lbyr_label), show.legend = F)+
+  guides(color=guide_legend(title="Sample Foods", override.aes = list(size=2)))+
+  scale_x_continuous(name = "Year", breaks=seq(1970,2015,5))+
+  scale_y_continuous(labels = percent, name = "% Growth in Pounds per Capita per Year Since 1970*")+
+  ggtitle("America's Eating Habits Reflect its Increase in Diversity Over the Last 40+ Years")+
+  labs(caption = "\n \n *All indexed since 1970, with the exception of Canned chile peppers which were not measured until 1980. Rice and Salad and cooking oils are not available past 2010.")+
+  theme_bw(base_size = 14)+
+  theme(axis.title.x = element_text(colour="black", size=14),
+        axis.title.y = element_text(colour="black", size=14),
+        axis.text.x = element_text(size = 12),
+        axis.text.y = element_text(size = 12),
+        plot.title   = element_text(size = 18,colour="deepskyblue4"),
+        plot.caption = element_text(hjust = 0, size = 10))
+ 
+``` 
+
+
+Additionally, taking a look at the imports of herbs and spices shows that they are more diverse than ever. Spices are often key to making a dish authentically and while the USDA foods database may not encompass every type of food that would be interesting to view trended over time, the spice data gives us more clues as to what people are eating.  Imports of the spices on the below graph have especially taken off in the last 10-15 years, much outpacing total population growth over the same time period.  The spice that actually grew the most in percentage terms was ginger, at 2,987% over the last 40 years, but is not pictured because it dwarfed the other spices and made it difficult to see their trends.  The popularity of ginger is probably due in part to its myriad [health benefits](https://www.everydayhealth.com/diet-nutrition/diet/ginger-nutrition-facts-health-benefits-alternative-uses-more/).
+
+
+```{r warning=FALSE, message=FALSE, eval=TRUE, echo=FALSE, fig.width=12,fig.height=7,fig.align='center'}
+
+
+diverse_spices <- spices[names(spices) %in% c('year','pop_millions','imports_corriander_thouslb','imports_cumin_thouslb',#'imports_ginger_thouslb',
+  'imports_sage_thouslb','imports_sesame_thouslb', 'imports_turmeric_thouslb','imports_paprika_thouslb')]
+
+
+#melt the spices data
+diverse_spices2 <- data.frame(lapply(diverse_spices, as.numeric))
+diverse_spices3 <- melt(diverse_spices2, id=c("year"))
+names(diverse_spices3) <- c('year','spice','thous_lbs')
+diverse_spices3$year <- as.numeric(diverse_spices3$year)
+diverse_spices3 <- diverse_spices3[diverse_spices3$year >= 1970,]
+
+diverse_spices3 <- diverse_spices3 %>% 
+  mutate(spice_label = ifelse(spice == 'imports_corriander_thouslb', 'Cilantro',
+                 ifelse(spice == 'imports_cumin_thouslb', 'Cumin',
+                 #ifelse(spice == 'imports_ginger_thouslb', 'Ginger', 
+                 ifelse(spice == 'imports_sage_thouslb', 'Sage',
+                 ifelse(spice == 'imports_sesame_thouslb', 'Sesame',
+                 ifelse(spice == 'imports_turmeric_thouslb', 'Turmeric',
+                 ifelse(spice == 'imports_paprika_thouslb', 'Paprika',
+                 'US Population')))))))
+
+diverse_spices3$thous_lbs <- as.numeric(diverse_spices3$thous_lbs)
+
+diverse_spices_index <- diverse_spices3 %>%
+  group_by(spice) %>%
+  mutate(index_thous_lbs = thous_lbs/thous_lbs[year==1970]-1) %>% ungroup()
+
+diverse_spices_index_label <- diverse_spices_index %>%
+  ungroup() %>%
+  filter(!is.na(index_thous_lbs)) %>%
+  group_by(spice_label) %>%
+  summarize(latest = max(year), index_thous_lbs_max = last(index_thous_lbs)) %>%
+  mutate(index_thous_lbs_label = paste('+',round(index_thous_lbs_max*100,0),'%')) %>% ungroup()
+
+diverse_spices_index$spice_label <- as.factor(diverse_spices_index$spice_label)
+
+
+ggplot() +
+  geom_line(data=diverse_spices_index, aes(x=year, y=index_thous_lbs, color = spice_label), size=1)+
+  geom_label_repel(data = diverse_spices_index_label, aes(x=latest, y=index_thous_lbs_max, color = spice_label, label = index_thous_lbs_label), show.legend = F)+
+  guides(color=guide_legend(title="Sample Spices", override.aes = list(size=2)))+
+  scale_x_continuous(name = "Year", breaks=seq(1970,2015,5))+
+  scale_y_continuous(labels = percent, name = "% Growth in Pounds Imported per Year Since 1970*")+
+  ggtitle("Growth in Imported Spices Has Outpaced US Population Growth")+
+  labs(caption = "\n \n *Ginger is not shown because it dwarfed the other spices, but it had the highest growth since 1970, at a whopping 2,987%!")+
+  theme_bw(base_size = 14)+
+  theme(axis.title.x = element_text(colour="black", size=14),
+        axis.title.y = element_text(colour="black", size=14),
+        axis.text.x = element_text(size = 12),
+        axis.text.y = element_text(size = 12),
+        plot.title   = element_text(size = 18,colour="deepskyblue4"),
+        plot.caption = element_text(hjust = 0, size = 12))
+
+
+
+```
+
+
+
+The findings from the USDA data can be compared with poll data to try to uncover the underlying causes of the food trends.  Data from a [Harris Poll](https://theharrispoll.com/new-york-n-y-june-10-2014-most-americans-87-say-theyre-making-an-effort-to-eat-healthy-and-with-good-reason-as-a-majority-say-they-or-someone-in-their-household-monitor-or-restrict-their-2/) taken in 2014 regarding the types of things Americans look for when purchasing food shows that Americans these days value freshness, fiber, and whole grains the most with 89%, 80%, and 77% respectively indicating that these characteristics are "important" (i.e. "Very important" or "Somewhat Important") in their purchasing decisions.  
+
+*(One thing to note about the Harris Poll data is that they do not release margins of error because they believe they are "theoretical" and can be misleading.  For this reason, my graphs below do not illustrate or include sampling error.  The reader should be aware that when comparing percentages between groups, small differences may not actually be statistically significant.)*
+
+
+
+```{r warning=FALSE, message=FALSE, eval=TRUE, echo=FALSE, fig.width=12,fig.height=8,fig.align='center'}
+
+harris_1a_crop <- harris_1a[,c("purchase_factor","important_net","not_important_net","not_at_all_sure")]
+harris_1a_crop <- harris_1a_crop[seq(dim(harris_1a_crop)[1],1),]
+harris_1a_crop_2 <- melt(harris_1a_crop, id=c("purchase_factor"))
+colnames(harris_1a_crop_2) <- c("purchase_factor","rating","percent")
+harris_1a_crop_2 <- harris_1a_crop_2 %>% mutate(label = ifelse(rating == 'important_net', 'Important (Net)',
+                                                        ifelse(rating == 'not_important_net', 'Not Important (Net)',
+                                                               'Not At All Sure')))
+
+harris_1a_crop_2$percent <- as.numeric(as.character(harris_1a_crop_2$percent))
+
+harris_1a_crop_2 <- harris_1a_crop_2 %>%
+  mutate(label =  factor(label, levels = c('Not At All Sure','Not Important (Net)','Important (Net)'))) %>%
+  arrange(label)
+
+ggplot(data = harris_1a_crop_2, aes(x = fct_inorder(purchase_factor), y = percent, fill = label)) + 
+  geom_bar(stat = 'identity') + 
+  scale_fill_manual(values = c("Important (Net)" = "plum", "Not Important (Net)" = "skyblue", "Not At All Sure" = "palegreen3"))+
+  coord_flip()+
+  scale_y_continuous(name = "Percent of Respondents*")+
+  scale_x_discrete(name = "Purchase Factor")+
+  ggtitle("Freshness and Fiber Lead Consumer Purchasing Decisions in 2014") +
+  labs(caption = "\n \n *Percentages do not add up to 100% for every purchase factor due to rounding.")+
+  guides(fill=guide_legend(title="Response"))+
+  geom_text(data = harris_1a_crop_2[harris_1a_crop_2$label == 'Important (Net)',], aes(x= fct_inorder(purchase_factor) ,y=percent,
+            label = paste(percent,'%',sep="")), size = 3.5,
+            position = 'stack',hjust = 2 )+
+  geom_text(data = harris_1a_crop_2[harris_1a_crop_2$label == 'Not Important (Net)',], aes(x= fct_inorder(purchase_factor) ,y=100-percent,
+            label = paste(percent,'%',sep="")), size = 3.5,
+            position = 'stack',hjust = 0 )+
+  geom_text(data = harris_1a_crop_2[harris_1a_crop_2$label == 'Not At All Sure',], aes(x= fct_inorder(purchase_factor) ,y=100-percent,
+            label = paste(percent,'%',sep="")), size = 3.5,
+            position = 'stack',hjust = 0 )+
+    theme_bw()+
+  theme(axis.title.x = element_text(colour="black", size=14),
+         axis.title.y = element_text(colour="black", size=14),
+         axis.text.x = element_text(size = 12),
+         axis.text.y = element_text(size = 12),
+         plot.title   = element_text(size = 18,colour="deepskyblue4"),
+         plot.caption = element_text(hjust = 0, size = 10))
+
+
+```
+
+
+Looking at the USDA data, we can see that over time, Americans have been consuming more foods in the "fresh" category and less foods in the "canned" category of fruits, vegetables, and seafood.  (Unfortuntely since the mid-2000s, fresh vegetable consumption has been decreasing, although it is still above pre-1990s values.)  This is interesting since for many years, humans had been searching for ways to preserve food for longer periods of time.  [Canning had been a breakthrough](https://www.history.com/news/what-it-says-on-the-tin-a-brief-history-of-canned-food) and [housewives in the 1950s](https://www.womenshistory.org/articles/how-highly-processed-foods-liberated-1950s-housewives) felt liberated by no longer needing to always prepare food fresh.  
+
+
+
+```{r warning=FALSE, message=FALSE, eval=TRUE, echo=FALSE, fig.width=12,fig.height=5,fig.align='center'}
+
+#put fresh, canned, and frozen of same type of veggie on the same graph (maybe do % change), somehow use faceting
+fruit_fresh_not <- all_food[all_food$foodtype %in% c('Fresh fruit','Canned fruit'),]
+fruit_fresh_not$facet <- "Fruit"
+
+veggies_fresh_not <- all_food[all_food$foodtype %in% c('Fresh vegetables','Canned vegetables'),]
+veggies_fresh_not$facet <- "Vegetables"
+
+fish_fresh_not <- all_food[all_food$foodtype %in% c('Canned fish and shellfish','Total Fresh and Frozen Fish'),]
+fish_fresh_not$facet <- "Seafood"
+
+
+fresh_not <- rbind(fruit_fresh_not, veggies_fresh_not, fish_fresh_not)
+
+ggplot(data=fresh_not) +
+  geom_line(aes(x=year, y=percapita_lbyr, color = foodtype), size=1)+
+  guides(color=guide_legend(title="Sample Foods", override.aes = list(size=2)))+
+  scale_x_continuous(name = "Year", breaks=seq(1970,2015,5))+
+  scale_y_continuous(name = "Pounds per Capita per Year")+
+  ggtitle("Fresh Food Consumption Has Increased While Canned Food Consumption Has Decreased")+
+  theme_bw()+
+  theme(axis.title.x = element_text(colour="black", size=14),
+        axis.title.y = element_text(colour="black", size=14),
+        plot.title   = element_text(size = 18,colour="deepskyblue4"))+
+  facet_wrap(~facet, scales = "free")
+
+
+```
+
+
+Over time, Americans' fascination with canned food has been reversing, translating into a higher demand for "fresh" food.  Americans have been demanding greater transparency into what goes into their food and wanting to know more details about its source.  To meet this demand, Farmer's Markets have sprung up all around the country as well as restaurants which list their producers by name and claim to ["source locally"](https://www.businessinsider.com/the-demand-for-local-food-is-growing-2017-4).  Popular culture has poked fun at the transparency in sourcing trend, like on the show [Portlandia,](https://www.newyorker.com/culture/on-television/food-and-drink-were-the-great-subject-of-portlandia) where a couple out to dinner demand to see the "papers" of a chicken named Colin to ensure he lived a happy life before they eat him.  Although the show portrays egaggerated reactions on the part of the characters, it correctly highlights Americans' increased ethical awareness in relation to their food itself as well as its sourcing.  
+
+
+The data from the Harris Poll also shows that there are generational similarities and differences in what Americans are eating these days.  Freshness, fiber, and whole grains are the top 3 purchasing factors among all generations, but older generations tended to consider them more, as is seen in the graph below. This was also the the case with many of the other purchase factors.  In general, older generations are more conscious about what they eat.  However, artifical sugar and packaged foods in particular are interesting since they did not follow the pattern of older generations considering them more, instead being considered pretty equally among all generations.  This points to their relative increased importance to younger generations and suggests the trends we saw above in regard to fresh food will continue.
+
+
+``` {r warning=FALSE, message=FALSE, eval=TRUE, echo=FALSE, fig.width=12,fig.height=7,fig.align='center'}
+harris_1b_crop <- harris_1b[,c('purchase_factor','generation_millennials_18_36','generation_gen_xers_37_48',
+                               'generation_baby_boomers_49_67','generation_matures_68+'),]
+
+harris_1b_crop_2 <- melt(harris_1b_crop, id=c("purchase_factor"))
+
+colnames(harris_1b_crop_2) <- c("purchase_factor","generation","percent_important")
+harris_1b_crop_2 <- harris_1b_crop_2 %>% mutate(label = ifelse(generation == 'generation_millennials_18_36', 'Millennials',
+                                                               ifelse(generation == 'generation_gen_xers_37_48', 'Generation X',
+                                                               ifelse(generation == 'generation_baby_boomers_49_67', 'Baby Boomers',    
+                                                                      'Matures'))))
+
+harris_1b_crop_2$percent_important <- as.numeric(as.character(harris_1b_crop_2$percent_important))
+
+harris_1b_crop_2 <- harris_1b_crop_2 %>%
+  mutate(label =  factor(label, levels = c('Matures','Baby Boomers','Generation X','Millennials'))) %>%
+  arrange(label)
+
+harris_1b_crop_equal <- harris_1b_crop_2[harris_1b_crop_2$purchase_factor %in% c('Fresh','Fiber','Whole grain','Packaged food','Artificial sugar'),]
+harris_1b_crop_younger_more <- harris_1b_crop_2[harris_1b_crop_2$purchase_factor %in% c('Vegan','Organic','Natural','Lactose','Gluten'),]
+
+
+ggplot(data = harris_1b_crop_equal, aes(x = purchase_factor, y = percent_important, fill = label)) + 
+  geom_bar(stat = 'identity') + 
+  scale_y_continuous(name = "% Answering Important (Net)", breaks = NULL)+
+  scale_x_discrete(name = "Purchase Factor")+
+  ggtitle("Artificial Sugar, Packaged Food Are Surprisingly Equally Important Among Generations") +
+  geom_text(data = harris_1b_crop_equal, aes(x=purchase_factor,y=percent_important, label = paste(percent_important,'%',sep='')),nudge_y = 4, size = 3)+
+  theme_bw()+
+  theme(axis.title.x = element_text(colour="black", size=14),
+        axis.title.y = element_text(colour="black", size=14),
+        axis.text.x = element_text(size=12, angle=30,hjust = 1),
+        plot.title   = element_text(size = 18,colour="deepskyblue4"))+
+  guides(fill=guide_legend(title="Generation"))+
+  facet_grid(label ~ .)
+
+
+```
+
+
+A select few purchase factors were actually considered more by the younger generations than the older generations, pointing to a generational shift in attitudes about these purchase factors.  As is seen in the graph below, millennials considered gluten, organic, and vegan characteristics the most differently than older generations.  Generation X was also very likely to consider whether a product was organic and the most likely of all generations to consider if a product is natural.  A whopping 27% of millennials said they considered whether a product was vegan, perhaps due to increased awareness of the "flexitarian" lifestyle as discussed above.  This points to the fact that among shoppers today, younger generations are spearheading some of the trends in food that are seen in the data, like the demand for environmentally sustainable and natural food.
+
+
+
+``` {r warning=FALSE, message=FALSE, eval=TRUE, echo=FALSE, fig.width=12,fig.height=7,fig.align='center'}
+
+ggplot(data = harris_1b_crop_younger_more, aes(x = purchase_factor, y = percent_important, fill = label)) + 
+  geom_bar(stat = 'identity') + 
+  scale_y_continuous(name = "% Answering Important (Net)", breaks = NULL)+
+  scale_x_discrete(name = "Purchase Factor")+
+  ggtitle("Millennials Much More Likely to Consider Vegan, Organic, Gluten When Purchasing Food/Beverages") +
+  geom_text(data = harris_1b_crop_younger_more, aes(x=purchase_factor,y=percent_important, label = paste(percent_important,'%',sep='')),nudge_y = 4, size = 3)+
+  theme_bw()+
+  theme(axis.title.x = element_text(colour="black", size=14),
+        axis.title.y = element_text(colour="black", size=14),
+        axis.text.x = element_text(size=12, angle=30,hjust = 1),
+        plot.title   = element_text(size = 18,colour="deepskyblue4"))+
+  guides(fill=guide_legend(title="Generation"))+
+  facet_grid(label ~ .)
+
+```
+
+
+
+Among those with children in their household, they considered whether food is organic, vegan, natural, and contains gluten the most differently in a positive direction than those who did not have children.  There is likely a good amount of overlap between Millennials, Generation X and households with children as these generations are likely to be within the child-bearing age.  However, it is still interesting to see that these particular purchase trends are more pronounced in households with children.  Studies have shown that children [show brand awareness](https://www.adweek.com/brand-marketing/when-does-brand-loyalty-start-62841/) at a very young age and are likely to purchase things their parents bought.  This also points to future generations being raised to be more conscious of where their food comes from and its sustainability.
+
+
+``` {r warning=FALSE, message=FALSE, eval=TRUE, echo=FALSE, fig.width=10,fig.height=7,fig.align='center'}
+
+harris_1b_children <- harris_1b[,c('purchase_factor','children_in_household_yes','children_in_household_no'),]
+harris_1b_children$children_in_household_yes <- as.numeric(harris_1b_children$children_in_household_yes)
+harris_1b_children$children_in_household_no <- as.numeric(harris_1b_children$children_in_household_no)
+harris_1b_children$differential <- harris_1b_children$children_in_household_yes - harris_1b_children$children_in_household_no
+
+
+ggplot(harris_1b_children, aes(x=reorder(purchase_factor,differential), y=differential, label=paste(differential,'%',sep = ''))) + 
+  geom_point(stat='identity', aes(color=ifelse(differential > 0, 'forestgreen', 'firebrick3')), size=10)  +
+  scale_color_identity()+
+  geom_segment(aes(y = 0, 
+                   x = purchase_factor, 
+                   yend = differential, 
+                   xend = purchase_factor), 
+               color = "black") +
+  geom_text(color="white", size=4) +
+  scale_x_discrete(name = "Purchase Factor") +
+  scale_y_continuous(name = "% Differential in Answering Important (Net) Between HHs With and Without Children")+
+  theme_bw()+
+  theme(axis.title.x = element_text(colour="black", size=12),
+        axis.title.y = element_text(colour="black", size=12),
+        plot.title   = element_text(size = 16,colour="deepskyblue4"),
+        axis.text.x = element_text(size=12),
+        axis.text.y = element_text(size=10),
+        plot.caption = element_text(hjust = 0, size = 10)) +
+  labs(title="Households With Children Value Organic, Natural More Than Those Without", 
+       caption = '\n \n *Positive values signify households with children answering "Important" at a higher rate than households without children.') + 
+  coord_flip()
+
+
+
+harris_3_crop <- harris_3[,c('restricted_item','generation_millennials_18_36','generation_gen_xers_37_48',
+                             'generation_baby_boomers_49_67','generation_matures_68+'),]
+
+harris_3_crop_2 <- melt(harris_3_crop, id=c("restricted_item"))
+
+colnames(harris_3_crop_2) <- c("restricted_item","generation","percent_restricting")
+harris_3_crop_2 <- harris_3_crop_2 %>% mutate(label = ifelse(generation == 'generation_millennials_18_36', 'Millennials',
+                                                      ifelse(generation == 'generation_gen_xers_37_48', 'Generation X',
+                                                      ifelse(generation == 'generation_baby_boomers_49_67', 'Baby Boomers',    
+                                                                           'Matures'))))
+
+harris_3_crop_2$percent_restricting <- as.numeric(as.character(harris_3_crop_2$percent_restricting))
+
+harris_3_crop_2 <- harris_3_crop_2 %>%
+  mutate(label =  factor(label, levels = c('Matures','Baby Boomers','Generation X','Millennials'))) %>%
+  arrange(label)
+
+harris_3_crop_allergens <- harris_3_crop_2[harris_3_crop_2$restricted_item %in% c('Dairy','Fish','Gluten','Lactose','Peanuts','Shell-fish'),]
+
+
+```
+
+Allergies could also be influencing the future of food for years to come.  Younger generations are suffering food allergies at higher rates than older generations.  Some of the main offenders are shown in the graph below.  Millennials and Gen-Xers are more likely to have someone in their household who restricts typical allergy-inducing foods.  This is in contrast with older generations who tended to restrict food associated with exacerbating a chronic-illness that could be associated with age.  For example, older generations restricted sodium/salt (blood pressure), sugar (diabetes), and meat (red meat associated with greater chance of heart disease) more than younger generations.  Food allergies are [shaping menus all over the country](https://www.washingtonpost.com/lifestyle/food/how-other-peoples-food-allergies-are-changing-what-you-eat/2017/11/05/fc4d5f14-bf44-11e7-97d9-bdab5a0ab381_story.html?utm_term=.9b0e9d5470fd), with many places outright banning certain foods like peanuts.  New restaurants are emerging that avoid selling the most common allergens, making them less available to those who do not suffer an allergy as well.
+
+
+``` {r warning=FALSE, message=FALSE, eval=TRUE, echo=FALSE, fig.width=12,fig.height=7,fig.align='center'}
+
+ggplot(data = harris_3_crop_allergens, aes(x = restricted_item, y = percent_restricting, fill = label)) + 
+  geom_bar(stat = 'identity') + 
+  scale_y_continuous(name = "% With Themselves or Someone in their HH Restricting Item", breaks = NULL)+
+  scale_x_discrete(name = "Restricted Item")+
+  ggtitle("Younger Generations Restrict Allergy-Inducing Items More Than Older Generations") +
+  geom_text(data = harris_3_crop_allergens, aes(x=restricted_item,y=percent_restricting, label = paste(percent_restricting,'%',sep='')),nudge_y = 2, size = 3)+
+  theme_bw()+
+  theme(axis.title.x = element_text(colour="black", size=14),
+        axis.title.y = element_text(colour="black", size=14),
+        axis.text.x = element_text(size=12, angle=30,hjust = 1),
+        plot.title   = element_text(size = 18,colour="deepskyblue4"))+
+  guides(fill=guide_legend(title="Generation"))+
+  facet_grid(label ~ .)
+
+```
+
+While some foods, like peanuts, have been banned around the country, other foods like almonds and yogurt have become breakout stars.  The graph below shows that yogurt, certain nuts, and berries have all seen their popularity increase as people are becoming aware of their health benefits.  "Anti-oxidants", "probiotics", and other terms are now common and foods that contain these compounds are being added to daily diets around the country.
+
+
+
+```{r warning=FALSE, message=FALSE, eval=TRUE, echo=FALSE, fig.width=12,fig.height=7,fig.align='center'}
+#beans have increased and so have nuts like pistachios- corresponds with increase in searches
+#for plant based and vegan
+
+#high fructose corn syrup- when was this invented? it has increased thousands of percentages
+
+
+#all red meat (lamb, veal, beef) has gone down while turkey and chicken are up
+
+
+#Dry Peas and lentils 5600% increase, Dry black beans 22000% increase
+trendy_nutrients <- all_food[all_food$foodtype %in% c('Yogurt','Fresh blueberries','Fresh strawberries','Frozen berries','Almonds','Total tree nuts','Pistachios'),]
+
+
+trendy_nutrients_index <- trendy_nutrients %>%
+  group_by(foodtype) %>%
+  mutate(index_percapita_lbyr = ifelse(foodtype == 'Fresh blueberries',percapita_lbyr/percapita_lbyr[year==1980]-1,percapita_lbyr/percapita_lbyr[year==1970]-1))
+
+trendy_nutrients_index_label <- trendy_nutrients_index %>%
+  ungroup() %>%
+  filter(!is.na(index_percapita_lbyr)) %>%
+  group_by(foodtype) %>%
+  summarize(latest = max(year), index_percapita_lbyr_max = last(index_percapita_lbyr)) %>%
+  mutate(index_percapita_lbyr_label = paste('+',round(index_percapita_lbyr_max*100,0),'%'))
+
+ggplot(data=trendy_nutrients_index, aes(x=year, y=index_percapita_lbyr, color = foodtype)) +
+  geom_line(size=1)+
+  geom_label_repel(data = trendy_nutrients_index_label, aes(x=latest, y=index_percapita_lbyr_max, label = index_percapita_lbyr_label), show.legend = F, point.padding = NA)+
+  guides(color=guide_legend(title="Sample Foods", override.aes = list(size=2)))+
+  scale_x_continuous(name = "Year", breaks=seq(1970,2015,5))+
+  scale_y_continuous(labels = percent, name = "% Growth in Pounds per Capita per Year Since 1970*")+
+  ggtitle("America is Eating More Foods Known For Certain Nutrients")+
+    labs(caption = "\n \n *All indexed since 1970, with the exception of Fresh blueberries which were not measured until 1980.")+
+  theme_bw(base_size = 14)+
+  theme(axis.title.x = element_text(colour="black", size=14),
+        axis.title.y = element_text(colour="black", size=14),
+        axis.text.x = element_text(size = 12),
+        axis.text.y = element_text(size = 12),
+        plot.title   = element_text(size = 18,colour="deepskyblue4"),
+        plot.caption = element_text(hjust = 0, size = 10))
+ 
+``` 
+
+
+Similar to the above foods, there has been an influx of new healthy, "trendy" foods.  Examples are qunioa and kale which exploded onto the market a few years ago and were/still are everywhere.  Lately, [cauliflower](https://www.vox.com/the-goods/2018/9/19/17874782/cauliflower-trend-vegetarian-paleo-rice) and [jackfruit](https://www.asaucykitchen.com/vegan-bbq-jackfruit-pulled-pork-sandwiches/) (popular with vegetarians due to its similar look to meat when cooked) have been gaining ground. These foods can be contrasted with ["trendy" foods of the 1980s](https://www.thekitchn.com/10-recipes-that-defined-the-1980s-recipes-of-the-decade-200638) like jello, spinach dip, and microwavable pizza snacks, which weren't necessarily healthy.
+
+
+
+```{r warning=FALSE, message=FALSE, eval=TRUE, echo=FALSE, fig.width=8,fig.height=5,fig.align='center'}
+
+kale_quinoa_cauliflower_gt <- read.csv('../../static/data/diet/supp_data/kale_quinoa_cauliflower_google_trends.csv', skip =2)
+colnames(kale_quinoa_cauliflower_gt) <- c('month','kale_pop','cauli_pop','quinoa_pop')
+kale_quinoa_cauliflower_gt$month <- as.Date(as.yearmon(kale_quinoa_cauliflower_gt$month))
+
+kale_quinoa_cauliflower_gt_2 <- melt(kale_quinoa_cauliflower_gt, id=c("month"))
+names(kale_quinoa_cauliflower_gt_2) <- c('month','food','popularity_index')
+kale_quinoa_cauliflower_gt_2$food <- as.character(kale_quinoa_cauliflower_gt_2$food)
+kale_quinoa_cauliflower_gt_2[kale_quinoa_cauliflower_gt_2$food == 'kale_pop',]$food <- 'Kale'
+kale_quinoa_cauliflower_gt_2[kale_quinoa_cauliflower_gt_2$food == 'cauli_pop',]$food <- 'Cauliflower'
+kale_quinoa_cauliflower_gt_2[kale_quinoa_cauliflower_gt_2$food == 'quinoa_pop',]$food <- 'Quinoa'
+
+ggplot(data=kale_quinoa_cauliflower_gt_2, aes(x=month, y=popularity_index, color = food)) +
+  geom_line(size = 1)+
+  guides(color=guide_legend(title="Search Terms", override.aes = list(size=2)))+
+  #scale_x_date(name = "Year", date_breaks = '6 months', date_labels = '%b-%Y')+
+  scale_x_date(name = "Year", date_breaks = "2 years")+
+  scale_y_continuous(name = "Google Trends Index Value*")+
+  labs(title = "Trendy Foods According to Google Searches",
+       caption = "*Index Values are in relation to each other over time.")+
+  theme_bw()+
+  theme(axis.title.x = element_text(colour="black", size=12),
+        axis.title.y = element_text(colour="black", size=12),
+        axis.text.x = element_text(angle = 30, hjust = 1),
+        plot.title   = element_text(size = 14,colour="deepskyblue4"),
+        plot.caption = element_text(hjust = 0, size = 8))
+
+
+```
+
+
+
+
+```{r warning=FALSE, message=FALSE, eval=TRUE, echo=FALSE, fig.width=12,fig.height=7,fig.align='center'}
+
+#food composition database from USDA: https://ndb.nal.usda.gov/ndb/search/list?maxsteps=6&format=&count=&max=25&sort=fd_s&fgcd=&manu=&lfacet=&qlookup=&ds=&qt=&qp=&qa=&qn=&q=&ing=&offset=125&order=asc
+
+#high fructose corn syrup and acai seem to be influenced by news stories
+
+#evoo has 25% of search popularity relating to rachael ray
+
+```
+
+```{r warning=FALSE, message=FALSE, eval=TRUE, echo=FALSE, fig.width=8,fig.height=5,fig.align='center'}
+
+
+#probiotic
+probiotic_gt <- read.csv('../../static/data/diet/supp_data/probiotic_google_trends.csv', skip =2)
+colnames(probiotic_gt) <- c('month','popularity_index')
+probiotic_gt$month <- as.Date(as.yearmon(probiotic_gt$month))
+probiotic_gt$term <- 'Probiotic'
+
+
+#low carb
+lowcarb_gt <- read.csv('../../static/data/diet/supp_data/lowcarb_google_trends.csv', skip =2)
+colnames(lowcarb_gt) <- c('month','popularity_index')
+lowcarb_gt$month <- as.Date(as.yearmon(lowcarb_gt$month))
+lowcarb_gt$term <- 'Low-carb'
+
+
+#low calorie
+lowcalorie_gt <- read.csv('../../static/data/diet/supp_data/lowcalorie_google_trends.csv', skip =2)
+colnames(lowcalorie_gt) <- c('month','popularity_index')
+lowcalorie_gt$month <- as.Date(as.yearmon(lowcalorie_gt$month))
+lowcalorie_gt$term <- 'Low-calorie'
+
+#high fiber
+
+highfiber_gt <- read.csv('../../static/data/diet/supp_data/highfiber_google_trends.csv', skip =2)
+colnames(highfiber_gt) <- c('month','popularity_index')
+highfiber_gt$month <- as.Date(as.yearmon(highfiber_gt$month))
+highfiber_gt$term <- 'High-fiber'
+
+#whole grains
+
+wholegrains_gt <- read.csv('../../static/data/diet/supp_data/wholegrains_google_trends.csv', skip =2)
+colnames(wholegrains_gt) <- c('month','popularity_index')
+wholegrains_gt$month <- as.Date(as.yearmon(wholegrains_gt$month))
+wholegrains_gt$term <- 'Whole grains'
+
+
+newyearsresolutions <- rbind(probiotic_gt, lowcarb_gt, lowcalorie_gt, highfiber_gt, wholegrains_gt)
+newyearsresolutions$popularity_index <- as.numeric(newyearsresolutions$popularity_index)
+
+januarys <- newyearsresolutions[month(newyearsresolutions$month) == 1 & newyearsresolutions$term == 'Probiotic' & newyearsresolutions$month >= '2013-01-01',]
+
+
+
+#exercise
+
+excercise_gt <- read.csv('../../static/data/diet/supp_data/exercise_google_trends.csv', skip =2)
+colnames(excercise_gt) <- c('month','popularity_index')
+excercise_gt$month <- as.Date(as.yearmon(excercise_gt$month))
+excercise_gt$term <- 'Exercise'
+
+
+#weight loss
+
+weightloss_gt <- read.csv('../../static/data/diet/supp_data/weightloss_google_trends.csv', skip =2)
+colnames(weightloss_gt) <- c('month','popularity_index')
+weightloss_gt$month <- as.Date(as.yearmon(weightloss_gt$month))
+weightloss_gt$term <- 'Weight Loss'
+
+
+#new years resolution
+
+nye_gt <- read.csv('../../static/data/diet/supp_data/newyearsresolution_google_trends.csv', skip =2)
+colnames(nye_gt) <- c('month','popularity_index')
+nye_gt$month <- as.Date(as.yearmon(nye_gt$month))
+nye_gt$term <- 'New Years Resolution'
+
+
+newyearsresolutions2 <- rbind(excercise_gt, weightloss_gt, nye_gt)
+newyearsresolutions2$popularity_index <- as.numeric(newyearsresolutions2$popularity_index)
+newyearsresolutions2$popularity_index[is.na(newyearsresolutions2$popularity_index)] <- 0
+
+
+```
+
+
+All of the evidence is pointing to the fact that Americans are making more of an *effort* to eat healthier and in select cases seem to be succeeding, but how are we *actually* doing overall?  If Google searches are any indicator, they show that the desire to eat healthy actually ebbs and flows throughout the year.  Does the most popular search month each year ring a bell?
+
+
+```{r warning=FALSE, message=FALSE, eval=TRUE, echo=FALSE, fig.width=8,fig.height=5,fig.align='center'}
+ggplot(data=newyearsresolutions[newyearsresolutions$month >= '2013-01-01',], aes(x=month, y=popularity_index, color = term)) +
+  geom_line(size = 1)+
+  geom_vline(data = januarys, aes(xintercept = as.numeric(month)), colour = "black", alpha = .7, linetype=2)+
+  guides(color=guide_legend(title="Search Terms", override.aes = list(size=2)))+
+  theme_bw()+
+  #scale_x_date(name = "Year", date_breaks = '6 months', date_labels = '%b-%Y')+
+  scale_x_date(name = "Year", date_breaks = "1 year", limits = c(min(januarys$month), max(newyearsresolutions$month)), date_labels = '%b-%Y')+
+    scale_y_continuous(name = "Google Trends Index Value")+
+  labs(title="Google Searches for Specific Dietary Terms Ebb and Flow Throughout the Year",
+       caption = "*Index Values are in relation to each term's own searches over time.")+
+  theme_bw()+
+  theme(axis.title.x = element_text(colour="black", size=12),
+        axis.title.y = element_text(colour="black", size=12),
+        plot.title   = element_text(size = 14,colour="deepskyblue4"),
+        plot.caption = element_text(hjust = 0, size = 8))
+```
+
+What if I plot some other search terms that follow the same pattern?
+
+
+```{r warning=FALSE, message=FALSE, eval=TRUE, echo=FALSE, fig.width=8,fig.height=5,fig.align='center'}
+
+ggplot(data=newyearsresolutions2[newyearsresolutions2$month >= '2013-01-01',], aes(x=month, y=popularity_index, color = term)) +
+  geom_line(size = 1)+
+  geom_vline(data = januarys, aes(xintercept = as.numeric(month)), colour = "black", alpha = .7, linetype=2)+
+  guides(color=guide_legend(title="Search Terms", override.aes = list(size=2)))+
+  theme_bw()+
+  #scale_x_date(name = "Year", date_breaks = '6 months', date_labels = '%b-%Y')+
+  scale_x_date(name = "Year", date_breaks = "1 year", limits = c(min(januarys$month), max(newyearsresolutions2$month)), date_labels = '%b-%Y')+
+  scale_y_continuous(name = "Google Trends Index Value*")+
+  labs(title="Other Google Searches That Ebb and Flow at the Same Time of the Year...",
+       caption = "*Index Values are in relation to each term's own searches over time.")+
+  theme_bw()+
+  theme(axis.title.x = element_text(colour="black", size=12),
+        axis.title.y = element_text(colour="black", size=12),
+        plot.title   = element_text(size = 14,colour="deepskyblue4"),
+        plot.caption = element_text(hjust = 0, size = 8))
+
+```
+
+Yup, you guessed it, Americans' interest in "healthly eating" terms correlates very well with their New Years Resolutions.  Unfortunately, Americans are *still* not actually eating as healthy as they should be, as we will see in the next section, titled "Some Things Have Remained the Same".
+
+##Some Things Have Remained the Same 40 Years Later
+
+
+Coming soon!
