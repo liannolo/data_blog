@@ -9,9 +9,9 @@ tags:
   - R
   - ggplot2
 description: ''
-featured: ''
-featuredalt: ''
-featuredpath: ''
+featured: 'IMG_6934.JPG'
+featuredalt: 'food'
+featuredpath: '/img/food'
 linktitle: ''
 type: 'post'
 ---

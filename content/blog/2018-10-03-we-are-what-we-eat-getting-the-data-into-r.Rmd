@@ -12,11 +12,13 @@ tags:
   - Web Scraping
   - Rvest
 description: ''
-featured: ''
-featuredalt: ''
-featuredpath: ''
+featured: 'IMG_6933.JPG'
+featuredalt: 'food'
+featuredpath: '/img/food'
 linktitle: ''
 type: 'post'
+# header:
+#   image: '../../static/img/2014/04/pic03.jpg'
 ---
 
 After reading several articles [here](http://www.pewresearch.org/fact-tank/2016/12/13/whats-on-your-table-how-americas-diet-has-changed-over-the-decades/), [here](https://www.vox.com/science-and-health/2017/2/2/14485226/americans-avocado-consumption-usda-report?mc_cid=dba0fc78bc&mc_eid=8f698ac693), and [here](https://cspinet.org/resource/changing-american-diet-0), I was inspired to investigate the USDA's [food availability and consumption data](https://www.ers.usda.gov/data-products/food-availability-per-capita-data-system/food-availability-per-capita-data-system/#Food%20Availability%20in%20CSV%20Format), myself and decided to make it a cornerstone of my first project for this blog!  
