@@ -198,10 +198,13 @@ sheetnames <- excel_sheets("../../static/data/diet/supp_data/spices.xls")
 ```
 
 
-To recap, inspired by the articles I linked in my [previous post,](https://www.datamadepretty.com/blog/we-are-what-we-eat-getting-the-data-into-r/) ([here](http://www.pewresearch.org/fact-tank/2016/12/13/whats-on-your-table-how-americas-diet-has-changed-over-the-decades/), [here](https://www.vox.com/science-and-health/2017/2/2/14485226/americans-avocado-consumption-usda-report?mc_cid=dba0fc78bc&mc_eid=8f698ac693), and [here](https://cspinet.org/resource/changing-american-diet-0)), I decided to investigate the USDA's food consumption dataset to get an idea of how Americans' diets have changed over time.  I am also complementing this dataset with Harris Poll and Google Trends data.  In the previous post, I demonstrated how I read the Excel files containing the USDA data into R and scraped the Harris Poll HTML tables.  In this post, I am going to be sharing some interesting findings derived from my data.
+Inspired by the articles I linked in my [previous post,](https://www.datamadepretty.com/blog/we-are-what-we-eat-getting-the-data-into-r/) ([here](http://www.pewresearch.org/fact-tank/2016/12/13/whats-on-your-table-how-americas-diet-has-changed-over-the-decades/), [here](https://www.vox.com/science-and-health/2017/2/2/14485226/americans-avocado-consumption-usda-report?mc_cid=dba0fc78bc&mc_eid=8f698ac693), and [here](https://cspinet.org/resource/changing-american-diet-0)), I decided to investigate the USDA's food consumption dataset to get an idea of how Americans' diets have changed over time.  I am also complementing this dataset with Harris Poll and Google Trends data.  In the previous post, I demonstrated how I read the Excel files containing the USDA data into R and scraped the Harris Poll HTML tables.  In this post, I am going to be sharing some interesting findings derived from my data.
 
 ##Some Things Have Changed Over The Last 40 Years
 
+The first section of this post discusses transformations that have taken place in how Americans eat, while the second section discusses a few trends that have remained constant over time.
+
+###Americans in 2015 Got Less Milk in their Fridge than Before "Got Milk" Campaign
 
 The first thing that I found interesting about the data that the articles I cited briefly touched on as well, was the dramatic decrease in the consumption of milk since 1970.  When I saw this trend, I was immediately puzzled.  How was there such a dramatic decline over time when there were all those "Got Milk" ads? I swear that growing up, they were everywhere: bus stops, magazines and everyone was wearing the milk mustache, from Serena and Venus Williams to the Olsen twins, so what gives?  It turns out after a little bit of research, I was able to uncover the truth about the "Got Milk?" ads.  While largely popular, they were known to be [highly ineffective](https://www.huffingtonpost.com/gene-del-vecchio/got-milk-got-fired-5-valu_b_4938176.html), but they still ran the campaign for 20 years!
 
@@ -269,7 +272,10 @@ ggplot(data=milk_summary) +
 ```
 
 
-As mentioned above, Americans are becoming more aware of the impact of food production on the environment and opting for more sustainable alternatives.  It is now well-known that [beef produces more greenhouse gases than poultry](https://www.washingtonpost.com/lifestyle/food/heres-how-much-giving-up-beef-helps--or-doesnt-help--the-planet/2017/07/20/03bb5ba2-6d60-11e7-b9e2-2056e768a7e5_story.html?utm_term=.22ad7bcdca0b) and that substituting at least some beef portions for vegetables or poultry would have a positive impact on the environment.  Many Americans are limiting red meat due to health concerns in addition to environmental concerns.  Red meat consumption has been associated with an [increased risk of heart disease](https://www.newsweek.com/meat-proteins-heart-disease-risk-plant-based-diets-benefit-cardiovascular-869896) (since most of the studies done to date have been observational in nature and thus not causal, the jury is still out but regardless the topic has made many headlines, some as dramatic as ["Is meat killing us?"](https://www.independent.co.uk/news/science/red-meat-processed-meat-death-mortality-health-cancer-heart-disease-vegetarian-vegan-diet-a7016986.html)).  Concurrent with red meat's decline, [chicken's star has been rising ](https://firstwefeast.com/features/2016/08/how-chicken-conquered-america/).  Chicken is generally cheaper than beef, but it has become trendy as [celebrity chefs](https://www.eater.com/2017/1/9/14169560/fried-chicken-trend) clamor to make their own take on the fried chicken sandwich and other classics.  The trend is causing [restaurants once known for selling beef](https://www.businessinsider.com/fried-chicken-is-taking-over-fast-food-2017-1) to sell chicken as well.  For the above reasons, as of the mid-2000s chicken has surpassed beef as America's favorite meat.  Other meat consumption has remained relatively unchanged.  Americans still seem to be infatuated with bacon, which is [having its own renaissance](http://fortune.com/2015/05/19/bacon/) or ["bacon mania,"](https://en.wikipedia.org/wiki/Bacon_mania) popularized over the internet.
+###Chicken Has Become "Chic" To Eat
+
+
+As mentioned above, Americans are becoming more aware of the impact of food production on the environment and opting for more sustainable alternatives.  It is now well-known that [beef produces more greenhouse gases than poultry](https://www.washingtonpost.com/lifestyle/food/heres-how-much-giving-up-beef-helps--or-doesnt-help--the-planet/2017/07/20/03bb5ba2-6d60-11e7-b9e2-2056e768a7e5_story.html?utm_term=.22ad7bcdca0b) and that substituting at least some beef portions with vegetables or poultry would have a positive impact on the environment.  Many Americans are limiting red meat due to health concerns in addition to environmental concerns.  Red meat consumption has been associated with an [increased risk of heart disease](https://www.newsweek.com/meat-proteins-heart-disease-risk-plant-based-diets-benefit-cardiovascular-869896) (since most of the studies done to date have been observational in nature and thus not causal, the jury is still out but regardless the topic has made many headlines, some as dramatic as ["Is meat killing us?"](https://www.independent.co.uk/news/science/red-meat-processed-meat-death-mortality-health-cancer-heart-disease-vegetarian-vegan-diet-a7016986.html)).  Concurrent with red meat's decline, [chicken's star has been rising ](https://firstwefeast.com/features/2016/08/how-chicken-conquered-america/).  Chicken is generally cheaper than beef, but it has become trendy as [celebrity chefs](https://www.eater.com/2017/1/9/14169560/fried-chicken-trend) clamor to make their own take on the fried chicken sandwich and other classics.  The trend is causing [restaurants once known for selling beef](https://www.businessinsider.com/fried-chicken-is-taking-over-fast-food-2017-1) to sell chicken as well.  For the above reasons, as of the mid-2000s chicken has surpassed beef as America's favorite meat.  Other meat consumption has remained relatively unchanged.  Americans still seem to be infatuated with bacon, which is [having its own renaissance](http://fortune.com/2015/05/19/bacon/) or ["bacon mania,"](https://en.wikipedia.org/wiki/Bacon_mania) popularized over the internet.
 
 
 
@@ -315,6 +321,8 @@ diverse_food_index_label <- diverse_food_index %>%
 
 ```
 
+###American Food is Diversifying Along With the American Population
+
 As discussed above, America has diversified greatly over the last 40+ years.  More immigrants from a wide array of continents have brought with them an increased interest in new foods, especially those from Mexico and Latin America.  The below graph shows a handful of foods that have increased in per capita annual consumption.  These are just a basket of foods available in the dataset, but I suspect if data was available on what types of dishes, rather than ingredients, Americans eat inside and outside of the home, we would also see an increase in diversity.  As an Italian American, I am particularly proud to see that the country has fully embraced cooking with garlic. This is a cultural shift from the early 1900s, as seen in "It's a Wonderful Life," when Mr. Potter derides Italians as ["a bunch of garlic eaters"](https://www.npr.org/2012/12/20/167620418/its-a-wonderful-italian-american-life) to George Bailey.  We are now a nation of garlic eaters!
 
 ```{r warning=FALSE, message=FALSE, eval=TRUE, echo=FALSE, fig.width=12,fig.height=7,fig.align='center'}
@@ -323,7 +331,7 @@ ggplot(data=diverse_food_index, aes(x=year, y=index_percapita_lbyr, color = food
   geom_label(data = diverse_food_index_label, aes(x=latest, y=index_percapita_lbyr_max, label = index_percapita_lbyr_label), show.legend = F)+
   guides(color=guide_legend(title="Sample Foods", override.aes = list(size=2)))+
   scale_x_continuous(name = "Year", breaks=seq(1970,2015,5))+
-  scale_y_continuous(labels = percent, name = "% Growth in Pounds per Capita per Year Since 1970*")+
+  scale_y_continuous(labels = percent, name = "% Growth in Pounds per Capita Since 1970*")+
   ggtitle("America's Eating Habits Reflect its Increase in Diversity Over the Last 40+ Years")+
   labs(caption = "\n \n *All indexed since 1970, with the exception of Canned chile peppers which were not measured until 1980. Rice and Salad and cooking oils are not available past 2010.")+
   theme_bw(base_size = 14)+
@@ -385,7 +393,7 @@ ggplot() +
   geom_label_repel(data = diverse_spices_index_label, aes(x=latest, y=index_thous_lbs_max, color = spice_label, label = index_thous_lbs_label), show.legend = F)+
   guides(color=guide_legend(title="Sample Spices", override.aes = list(size=2)))+
   scale_x_continuous(name = "Year", breaks=seq(1970,2015,5))+
-  scale_y_continuous(labels = percent, name = "% Growth in Pounds Imported per Year Since 1970*")+
+  scale_y_continuous(labels = percent, name = "% Growth in Pounds Imported Since 1970*")+
   ggtitle("Growth in Imported Spices Has Outpaced US Population Growth")+
   labs(caption = "\n \n *Ginger is not shown because it dwarfed the other spices, but it had the highest growth since 1970, at a whopping 2,987%!")+
   theme_bw(base_size = 14)+
@@ -401,6 +409,7 @@ ggplot() +
 ```
 
 
+###Freshness and Fiber Lead Purchasing Decisions, but Generations Diverge for Other Factors
 
 The findings from the USDA data can be compared with poll data to try to uncover the underlying causes of the food trends.  Data from a [Harris Poll](https://theharrispoll.com/new-york-n-y-june-10-2014-most-americans-87-say-theyre-making-an-effort-to-eat-healthy-and-with-good-reason-as-a-majority-say-they-or-someone-in-their-household-monitor-or-restrict-their-2/) taken in 2014 regarding the types of things Americans look for when purchasing food shows that Americans these days value freshness, fiber, and whole grains the most with 89%, 80%, and 77% respectively indicating that these characteristics are "important" (i.e. "Very important" or "Somewhat Important") in their purchasing decisions.  
 
@@ -414,29 +423,29 @@ harris_1a_crop <- harris_1a[,c("purchase_factor","important_net","not_important_
 harris_1a_crop <- harris_1a_crop[seq(dim(harris_1a_crop)[1],1),]
 harris_1a_crop_2 <- melt(harris_1a_crop, id=c("purchase_factor"))
 colnames(harris_1a_crop_2) <- c("purchase_factor","rating","percent")
-harris_1a_crop_2 <- harris_1a_crop_2 %>% mutate(label = ifelse(rating == 'important_net', 'Important (Net)',
-                                                        ifelse(rating == 'not_important_net', 'Not Important (Net)',
+harris_1a_crop_2 <- harris_1a_crop_2 %>% mutate(label = ifelse(rating == 'important_net', 'Important (Total)',
+                                                        ifelse(rating == 'not_important_net', 'Not Important (Total)',
                                                                'Not At All Sure')))
 
 harris_1a_crop_2$percent <- as.numeric(as.character(harris_1a_crop_2$percent))
 
 harris_1a_crop_2 <- harris_1a_crop_2 %>%
-  mutate(label =  factor(label, levels = c('Not At All Sure','Not Important (Net)','Important (Net)'))) %>%
+  mutate(label =  factor(label, levels = c('Not At All Sure','Not Important (Total)','Important (Total)'))) %>%
   arrange(label)
 
 ggplot(data = harris_1a_crop_2, aes(x = fct_inorder(purchase_factor), y = percent, fill = label)) + 
   geom_bar(stat = 'identity') + 
-  scale_fill_manual(values = c("Important (Net)" = "plum", "Not Important (Net)" = "skyblue", "Not At All Sure" = "palegreen3"))+
+  scale_fill_manual(values = c("Important (Total)" = "plum", "Not Important (Total)" = "skyblue", "Not At All Sure" = "palegreen3"))+
   coord_flip()+
   scale_y_continuous(name = "Percent of Respondents*")+
   scale_x_discrete(name = "Purchase Factor")+
   ggtitle("Freshness and Fiber Lead Consumer Purchasing Decisions in 2014") +
   labs(caption = "\n \n *Percentages do not add up to 100% for every purchase factor due to rounding.")+
   guides(fill=guide_legend(title="Response"))+
-  geom_text(data = harris_1a_crop_2[harris_1a_crop_2$label == 'Important (Net)',], aes(x= fct_inorder(purchase_factor) ,y=percent,
+  geom_text(data = harris_1a_crop_2[harris_1a_crop_2$label == 'Important (Total)',], aes(x= fct_inorder(purchase_factor) ,y=percent,
             label = paste(percent,'%',sep="")), size = 3.5,
             position = 'stack',hjust = 2 )+
-  geom_text(data = harris_1a_crop_2[harris_1a_crop_2$label == 'Not Important (Net)',], aes(x= fct_inorder(purchase_factor) ,y=100-percent,
+  geom_text(data = harris_1a_crop_2[harris_1a_crop_2$label == 'Not Important (Total)',], aes(x= fct_inorder(purchase_factor) ,y=100-percent,
             label = paste(percent,'%',sep="")), size = 3.5,
             position = 'stack',hjust = 0 )+
   geom_text(data = harris_1a_crop_2[harris_1a_crop_2$label == 'Not At All Sure',], aes(x= fct_inorder(purchase_factor) ,y=100-percent,
@@ -489,10 +498,10 @@ ggplot(data=fresh_not) +
 ```
 
 
-Over time, Americans' fascination with canned food has been reversing, translating into a higher demand for "fresh" food.  Americans have been demanding greater transparency into what goes into their food and wanting to know more details about its source.  To meet this demand, Farmer's Markets have sprung up all around the country as well as restaurants which list their producers by name and claim to ["source locally"](https://www.businessinsider.com/the-demand-for-local-food-is-growing-2017-4).  Popular culture has poked fun at the transparency in sourcing trend, like on the show [Portlandia,](https://www.newyorker.com/culture/on-television/food-and-drink-were-the-great-subject-of-portlandia) where a couple out to dinner demand to see the "papers" of a chicken named Colin to ensure he lived a happy life before they eat him.  Although the show portrays egaggerated reactions on the part of the characters, it correctly highlights Americans' increased ethical awareness in relation to their food itself as well as its sourcing.  
+Over time, Americans' fascination with canned food has been reversing, translating into a higher demand for "fresh" food.  Americans have been demanding greater transparency into what goes into their food and wanting to know more details about its source.  To meet this demand, Farmer's Markets have sprung up all around the country as well as restaurants which list their producers by name and claim to ["source locally"](https://www.businessinsider.com/the-demand-for-local-food-is-growing-2017-4).  Popular culture has poked fun at the transparency in sourcing trend, like on the show [Portlandia,](https://www.newyorker.com/culture/on-television/food-and-drink-were-the-great-subject-of-portlandia) where a couple out to dinner demand to see the "papers" of a chicken named Colin to ensure he lived a happy life before they eat him.  Although the show portrays exaggerated reactions on the part of the characters, it correctly highlights Americans' increased ethical awareness in relation to their food itself as well as its sourcing.  
 
 
-The data from the Harris Poll also shows that there are generational similarities and differences in what Americans are eating these days.  Freshness, fiber, and whole grains are the top 3 purchasing factors among all generations, but older generations tended to consider them more, as is seen in the graph below. This was also the the case with many of the other purchase factors.  In general, older generations are more conscious about what they eat.  However, artifical sugar and packaged foods in particular are interesting since they did not follow the pattern of older generations considering them more, instead being considered pretty equally among all generations.  This points to their relative increased importance to younger generations and suggests the trends we saw above in regard to fresh food will continue.
+The data from the Harris Poll also shows that there are generational similarities and differences in what Americans are eating these days.  Freshness, fiber, and whole grains are the top 3 purchasing factors among all generations, but older generations tended to consider them more, as is seen in the graph below. This was also the the case with many of the other purchase factors.  In general, older generations are more conscious about what they eat.  However, artifical sugar and packaged foods in particular are interesting since they did not follow the pattern of older generations taking them into account them more, instead being valued pretty equally among all generations.  This points to their relative increased importance to younger generations and suggests the trends we saw above in regard to fresh food will continue.
 
 
 ``` {r warning=FALSE, message=FALSE, eval=TRUE, echo=FALSE, fig.width=12,fig.height=7,fig.align='center'}
@@ -519,7 +528,7 @@ harris_1b_crop_younger_more <- harris_1b_crop_2[harris_1b_crop_2$purchase_factor
 
 ggplot(data = harris_1b_crop_equal, aes(x = purchase_factor, y = percent_important, fill = label)) + 
   geom_bar(stat = 'identity') + 
-  scale_y_continuous(name = "% Answering Important (Net)", breaks = NULL)+
+  scale_y_continuous(name = "% Answering Important (Total)", breaks = NULL)+
   scale_x_discrete(name = "Purchase Factor")+
   ggtitle("Artificial Sugar, Packaged Food Are Surprisingly Equally Important Among Generations") +
   geom_text(data = harris_1b_crop_equal, aes(x=purchase_factor,y=percent_important, label = paste(percent_important,'%',sep='')),nudge_y = 4, size = 3)+
@@ -535,7 +544,7 @@ ggplot(data = harris_1b_crop_equal, aes(x = purchase_factor, y = percent_importa
 ```
 
 
-A select few purchase factors were actually considered more by the younger generations than the older generations, pointing to a generational shift in attitudes about these purchase factors.  As is seen in the graph below, millennials considered gluten, organic, and vegan characteristics the most differently than older generations.  Generation X was also very likely to consider whether a product was organic and the most likely of all generations to consider if a product is natural.  A whopping 27% of millennials said they considered whether a product was vegan, perhaps due to increased awareness of the "flexitarian" lifestyle as discussed above.  This points to the fact that among shoppers today, younger generations are spearheading some of the trends in food that are seen in the data, like the demand for environmentally sustainable and natural food.
+A select few purchase factors were actually considered more by the younger generations than the older generations, pointing to a generational shift in attitudes about these purchase factors.  As is seen in the graph below, millennials valued gluten, organic, and vegan characteristics the most differently than older generations.  Generation X was also very likely to take note of whether a product was organic and the most likely of all generations to care if a product is natural.  A whopping 27% of millennials said they valued whether a product was vegan, perhaps due to increased awareness of the "flexitarian" lifestyle as discussed above.  This points to the fact that among shoppers today, younger generations are spearheading some of the trends in food that are seen in the data, like the demand for environmentally sustainable and natural food.
 
 
 
@@ -543,7 +552,7 @@ A select few purchase factors were actually considered more by the younger gener
 
 ggplot(data = harris_1b_crop_younger_more, aes(x = purchase_factor, y = percent_important, fill = label)) + 
   geom_bar(stat = 'identity') + 
-  scale_y_continuous(name = "% Answering Important (Net)", breaks = NULL)+
+  scale_y_continuous(name = "% Answering Important (Total)", breaks = NULL)+
   scale_x_discrete(name = "Purchase Factor")+
   ggtitle("Millennials Much More Likely to Consider Vegan, Organic, Gluten When Purchasing Food/Beverages") +
   geom_text(data = harris_1b_crop_younger_more, aes(x=purchase_factor,y=percent_important, label = paste(percent_important,'%',sep='')),nudge_y = 4, size = 3)+
@@ -580,7 +589,7 @@ ggplot(harris_1b_children, aes(x=reorder(purchase_factor,differential), y=differ
                color = "black") +
   geom_text(color="white", size=4) +
   scale_x_discrete(name = "Purchase Factor") +
-  scale_y_continuous(name = "% Differential in Answering Important (Net) Between HHs With and Without Children")+
+  scale_y_continuous(name = "% Differential in Answering Important (Total) Between HHs With and Without Children")+
   theme_bw()+
   theme(axis.title.x = element_text(colour="black", size=12),
         axis.title.y = element_text(colour="black", size=12),
@@ -616,6 +625,9 @@ harris_3_crop_allergens <- harris_3_crop_2[harris_3_crop_2$restricted_item %in% 
 
 ```
 
+###An Increase in Allergies Shapes Menus for All
+
+
 Allergies could also be influencing the future of food for years to come.  Younger generations are suffering food allergies at higher rates than older generations.  Some of the main offenders are shown in the graph below.  Millennials and Gen-Xers are more likely to have someone in their household who restricts typical allergy-inducing foods.  This is in contrast with older generations who tended to restrict food associated with exacerbating a chronic-illness that could be associated with age.  For example, older generations restricted sodium/salt (blood pressure), sugar (diabetes), and meat (red meat associated with greater chance of heart disease) more than younger generations.  Food allergies are [shaping menus all over the country](https://www.washingtonpost.com/lifestyle/food/how-other-peoples-food-allergies-are-changing-what-you-eat/2017/11/05/fc4d5f14-bf44-11e7-97d9-bdab5a0ab381_story.html?utm_term=.9b0e9d5470fd), with many places outright banning certain foods like peanuts.  New restaurants are emerging that avoid selling the most common allergens, making them less available to those who do not suffer an allergy as well.
 
 
@@ -636,6 +648,9 @@ ggplot(data = harris_3_crop_allergens, aes(x = restricted_item, y = percent_rest
   facet_grid(label ~ .)
 
 ```
+
+
+###"Healthy" is the New "Trendy"
 
 While some foods, like peanuts, have been banned around the country, other foods like almonds and yogurt have become breakout stars.  The graph below shows that yogurt, certain nuts, and berries have all seen their popularity increase as people are becoming aware of their health benefits.  "Anti-oxidants", "probiotics", and other terms are now common and foods that contain these compounds are being added to daily diets around the country.
 
@@ -671,7 +686,7 @@ ggplot(data=trendy_nutrients_index, aes(x=year, y=index_percapita_lbyr, color = 
   geom_label_repel(data = trendy_nutrients_index_label, aes(x=latest, y=index_percapita_lbyr_max, label = index_percapita_lbyr_label), show.legend = F, point.padding = NA)+
   guides(color=guide_legend(title="Sample Foods", override.aes = list(size=2)))+
   scale_x_continuous(name = "Year", breaks=seq(1970,2015,5))+
-  scale_y_continuous(labels = percent, name = "% Growth in Pounds per Capita per Year Since 1970*")+
+  scale_y_continuous(labels = percent, name = "% Growth in Pounds per Capita Since 1970*")+
   ggtitle("America is Eating More Foods Known For Certain Nutrients")+
     labs(caption = "\n \n *All indexed since 1970, with the exception of Fresh blueberries which were not measured until 1980.")+
   theme_bw(base_size = 14)+
